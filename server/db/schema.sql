@@ -105,7 +105,6 @@ CREATE TABLE products (
   CONSTRAINT fk_product_category FOREIGN KEY (category_id) REFERENCES categories(id),
   CONSTRAINT fk_product_created_by FOREIGN KEY (created_by) REFERENCES staff(id) ON DELETE SET NULL,
   CONSTRAINT fk_product_updated_by FOREIGN KEY (updated_by) REFERENCES staff(id) ON DELETE SET NULL,
-  FULLTEXT KEY ft_product_search (name, description),
   KEY idx_product_type (product_type, is_available)
 ) ENGINE=InnoDB;
 

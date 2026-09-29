@@ -6,6 +6,7 @@ import { ToastProvider } from './context/ToastContext';
 import { StaffAuthProvider } from './context/StaffAuthContext';
 import { CustomerAuthProvider } from './context/CustomerAuthContext';
 import { CartProvider } from './context/CartContext';
+import { CartUIProvider } from './context/CartUIContext';
 import './styles/variables.css';
 import './styles/base.css';
 import './styles/components.css';
@@ -19,7 +20,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <StaffAuthProvider>
           <CustomerAuthProvider>
             <CartProvider>
-              <App />
+              <CartUIProvider>
+                <App />
+              </CartUIProvider>
             </CartProvider>
           </CustomerAuthProvider>
         </StaffAuthProvider>

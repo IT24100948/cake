@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useCart } from '../context/CartContext';
-import { useCustomerAuth } from '../context/CustomerAuthContext';
-import NotificationBell from '../components/NotificationBell';
-import Icon from '../components/Icons';
+import { useEffect, useState } from 'react';
+import { Link, Outlet, useLocation } from 'react-router-dom';
+import SiteHeader, { useSectionNav } from '../components/site/SiteHeader';
+import SiteFooter from '../components/site/SiteFooter';
+import CartDrawer from '../components/site/CartDrawer';
+import '../styles/site.css';
 
 export function Brand({ to = '/', sub = "Cake n' Party" }) {
   return (
@@ -14,111 +14,46 @@ export function Brand({ to = '/', sub = "Cake n' Party" }) {
   );
 }
 
-function AccountMenu() {
-  const { customer, logout } = useCustomerAuth();
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  const navigate = useNavigate();
-  const location = useLocation();
-  useEffect(() => setOpen(false), [location.pathname]);
-  useEffect(() => {
-    if (!open) return undefined;
-    const close = (e) => !ref.current?.contains(e.target) && setOpen(false);
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [open]);
+const NO_ORDER_BAR = ['/cart', '/checkout', '/login', '/register', '/order-placed', '/custom-cake'];
 
-  if (!customer) {
-    return (
-      <>
-        <Link to="/login" className="btn btn-ghost btn-sm">Log in</Link>
-        <Link to="/register" className="btn btn-primary btn-sm">Sign up</Link>
-      </>
-    );
-  }
+/** Storefront shell: sticky header, cart drawer, footer and the mobile "Order Cake" bar. */
+export default function PublicLayout() {
+  const location = useLocation();
+  const goSection = useSectionNav();
+  const isHome = location.pathname === '/';
+  const [inBuilder, setInBuilder] = useState(false);
+  const orderBar = !NO_ORDER_BAR.some((p) => location.pathname.startsWith(p)) && !inBuilder;
+
+  // The builder has its own Add button, so the sticky "Order a Cake" bar steps aside there.
+  useEffect(() => {
+    setInBuilder(false);
+    if (!isHome || typeof IntersectionObserver === 'undefined') return undefined;
+    let io;
+    const t = setTimeout(() => {
+      const el = document.getElementById('build');
+      if (!el) return;
+      io = new IntersectionObserver(([e]) => setInBuilder(e.isIntersecting), { threshold: 0.05 });
+      io.observe(el);
+    }, 300);
+    return () => { clearTimeout(t); io?.disconnect(); };
+  }, [isHome]);
+
+  useEffect(() => { if (!location.hash) window.scrollTo(0, 0); }, [location.pathname, location.hash]);
+
   return (
-    <div className="dropdown" ref={ref}>
-      <button type="button" className="icon-btn" onClick={() => setOpen((o) => !o)} aria-label="Account menu" aria-expanded={open}>
-        <Icon name="user" />
-      </button>
-      {open && (
-        <div className="dropdown-menu">
-          <div className="menu-head">
-            <div className="strong">{customer.full_name}</div>
-            <div className="text-xs muted">{customer.email}</div>
-          </div>
-          <Link to="/my/orders">My orders</Link>
-          <Link to="/notifications">Notifications</Link>
-          <Link to="/profile">Profile & password</Link>
-          <button type="button" onClick={async () => { await logout(); navigate('/'); }}>Log out</button>
+    <div className={`store${orderBar ? ' has-order-bar' : ''}`}>
+      <a href="#main" className="skip-link">Skip to content</a>
+      <SiteHeader />
+      <main id="main" className={`store-main${isHome ? ' is-home' : ''}`}>
+        {isHome ? <Outlet /> : <div className="container"><Outlet /></div>}
+      </main>
+      <SiteFooter />
+      <CartDrawer />
+      {orderBar && (
+        <div className="order-bar">
+          <button type="button" className="pill pill-primary pill-lg" onClick={() => goSection('build')}>Order a Cake</button>
         </div>
       )}
     </div>
-  );
-}
-
-export default function PublicLayout() {
-  const { count } = useCart();
-  const { customer } = useCustomerAuth();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const location = useLocation();
-  useEffect(() => { setMenuOpen(false); window.scrollTo(0, 0); }, [location.pathname]);
-  const shopType = location.pathname.startsWith('/shop') ? new URLSearchParams(location.search).get('type') : null;
-
-  return (
-    <>
-      <header className="site-header">
-        <div className="container">
-          <button type="button" className="icon-btn menu-toggle" onClick={() => setMenuOpen((o) => !o)} aria-label="Menu" aria-expanded={menuOpen}>
-            <Icon name={menuOpen ? 'x' : 'menu'} />
-          </button>
-          <Brand />
-          <nav className={`main-nav${menuOpen ? ' open' : ''}`} aria-label="Main">
-            <Link to="/shop?type=CAKE" className={shopType === 'CAKE' ? 'active' : ''}>Cakes</Link>
-            <Link to="/shop?type=DECORATION" className={shopType === 'DECORATION' ? 'active' : ''}>Party Decorations</Link>
-            <NavLink to="/custom-cake">Custom Cake</NavLink>
-            {customer && <NavLink to="/my/orders">My Orders</NavLink>}
-          </nav>
-          <div className="header-actions">
-            <Link to="/cart" className="icon-btn" aria-label={`Cart, ${count} item(s)`}>
-              <Icon name="cart" />
-              {count > 0 && <span className="dot-count">{count}</span>}
-            </Link>
-            {customer && <NotificationBell />}
-            <AccountMenu />
-          </div>
-        </div>
-      </header>
-      <main className="site-main">
-        <div className="container"><Outlet /></div>
-      </main>
-      <footer className="site-footer">
-        <div className="container">
-          <div className="footer-grid">
-            <div>
-              <h4>Devma Cake n' Party</h4>
-              <p>Fresh cakes and everything you need for your celebration — order online and we’ll take care of the rest.</p>
-            </div>
-            <div>
-              <h4>Shop</h4>
-              <ul>
-                <li><Link to="/shop?type=CAKE">Cakes</Link></li>
-                <li><Link to="/shop?type=DECORATION">Party decorations</Link></li>
-                <li><Link to="/custom-cake">Request a custom cake</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4>Account</h4>
-              <ul>
-                <li><Link to="/my/orders">Track my orders</Link></li>
-                <li><Link to="/profile">My profile</Link></li>
-                <li><Link to="/staff/login">Staff portal</Link></li>
-              </ul>
-            </div>
-          </div>
-          <div className="copy">© {new Date().getFullYear()} Devma Cake n' Party. All rights reserved.</div>
-        </div>
-      </footer>
-    </>
   );
 }

@@ -9,13 +9,21 @@ import { isPhone } from '../../utils/validation';
 import { Alert, Field, SubmitButton } from '../../components/ui';
 import { CakeSummary } from './Cart';
 
+const CAKE_FIELDS = ['occasion', 'flavor', 'weightKg', 'shape', 'tiers', 'icingType', 'colors', 'theme', 'messageOnCake', 'dietaryNotes', 'additionalDetails'];
+
+/** Only the API's cake-requirement fields; builder-only data (thumbnail, design, estimate) stays in the browser. */
+function cakeRequirementPayload(cake) {
+  if (!cake) return undefined;
+  return Object.fromEntries(CAKE_FIELDS.filter((k) => cake[k] !== undefined && cake[k] !== '').map((k) => [k, cake[k]]));
+}
+
 // US15 - Submit an order
 export default function Checkout() {
   const cart = useCart();
   const { customer } = useCustomerAuth();
   const navigate = useNavigate();
   const f = useForm({
-    fulfillmentType: 'DELIVERY', eventDate: isoDate(cart.customCake ? 3 : 1), notes: '',
+    fulfillmentType: 'DELIVERY', eventDate: cart.eventDate && cart.eventDate >= isoDate(1) ? cart.eventDate : isoDate(cart.customCake ? 3 : 1), notes: '',
     recipientName: customer.full_name, contactPhone: customer.phone, address: customer.address || '', city: customer.city || '',
     preferredTimeSlot: '', deliveryNotes: '',
   });
@@ -38,7 +46,7 @@ export default function Checkout() {
     f.submit(async (v) => {
       const payload = {
         items: cart.items.map((i) => ({ productId: i.productId, quantity: i.quantity, notes: i.notes?.trim() || undefined })),
-        cakeRequirement: cart.customCake || undefined,
+        cakeRequirement: cakeRequirementPayload(cart.customCake),
         fulfillmentType: v.fulfillmentType,
         eventDate: v.eventDate,
         notes: v.notes.trim() || undefined,

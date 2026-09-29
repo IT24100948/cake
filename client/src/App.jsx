@@ -5,7 +5,7 @@ import { Empty } from './components/ui';
 import PublicLayout from './layouts/PublicLayout';
 import StaffLayout, { firstAllowedPath } from './layouts/StaffLayout';
 
-import Home from './pages/public/Home';
+import Landing from './landing/Landing';
 import Shop from './pages/public/Shop';
 import ProductDetail from './pages/public/ProductDetail';
 import Login from './pages/public/Login';
@@ -48,7 +48,7 @@ export default function App() {
   return (
     <Routes>
       <Route element={<PublicLayout />}>
-        <Route index element={<Home />} />
+        <Route index element={<Landing />} />
         <Route path="shop" element={<Shop />} />
         <Route path="shop/:id" element={<ProductDetail />} />
         <Route path="custom-cake" element={<CustomCake />} />

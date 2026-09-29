@@ -1,29 +1,44 @@
 /* Devma Cake n' Party - design tokens */
 :root {
-  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
-  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Cormorant', 'Cormorant Garamond', Georgia, serif;
+  --font-body: 'Jost', 'Futura', 'Avenir Next', system-ui, sans-serif;
+  --font-script: 'Pinyon Script', 'Snell Roundhand', cursive;
+
+  /* Cake n' Party brand palette */
+  --cream: #FFF9F7;
+  --blush: #F8DDE2;
+  --pink: #E83E78;          /* large text & accents */
+  --pink-deep: #D6336C;     /* button fills (AA with white) */
+  --pink-ink: #C92F63;      /* small pink text on cream (AA) */
+  --rose: #F3A6B8;
+  --berry: #65152E;
+  --espresso: #3A1A22;
+  --ivory: #FFFDFB;
+  --frosting: #F7C9D4;
+  --hairline: rgba(101, 21, 46, 0.08);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 
   /* Brand */
   --berry-50: #fdf2f5;
   --berry-100: #fbe3ea;
   --berry-200: #f5c2d1;
-  --berry-500: #c8466d;
-  --berry-600: #b83b5e;
-  --berry-700: #962e4b;
-  --cocoa-900: #2e1f1b;
-  --cocoa-700: #54403a;
-  --cocoa-500: #8a756e;
-  --cream-50: #fffaf6;
-  --cream-100: #fbf3ec;
-  --cream-200: #f3e6da;
+  --berry-500: #e0528a;
+  --berry-600: #d6336c;
+  --berry-700: #b8285a;
+  --cocoa-900: #3a1a22;
+  --cocoa-700: #65152e;
+  --cocoa-500: #8b6570;
+  --cream-50: #fff9f7;
+  --cream-100: #fdf1ef;
+  --cream-200: #f6e4e3;
   --gold-400: #e0b04f;
 
   /* Semantic */
   --bg: var(--cream-50);
   --bg-muted: var(--cream-100);
   --surface: #ffffff;
-  --border: #eadcd1;
-  --border-strong: #d7c4b7;
+  --border: #f0e0df;
+  --border-strong: #e0c8cb;
   --text: var(--cocoa-900);
   --text-muted: var(--cocoa-500);
   --text-soft: var(--cocoa-700);
@@ -48,9 +63,9 @@
   --radius-sm: 6px;
   --radius: 10px;
   --radius-lg: 16px;
-  --shadow-sm: 0 1px 2px rgba(46, 31, 27, 0.06);
-  --shadow: 0 4px 16px rgba(46, 31, 27, 0.08);
-  --shadow-lg: 0 16px 40px rgba(46, 31, 27, 0.16);
+  --shadow-sm: 0 1px 2px rgba(101, 21, 46, 0.06);
+  --shadow: 0 6px 20px rgba(101, 21, 46, 0.08);
+  --shadow-lg: 0 18px 48px rgba(101, 21, 46, 0.16);
 
   --sidebar-w: 248px;
   --header-h: 68px;

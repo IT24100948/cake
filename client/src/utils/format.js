@@ -83,3 +83,6 @@ export const ORDER_FLOW = {
 export const TIME_SLOTS = ['8am - 10am', '9am - 12pm', '12pm - 3pm', '3pm - 6pm', '6pm - 8pm'];
 
 export const imageUrl = (u) => u || '/favicon.svg';
+
+/** Whole-rupee price for the storefront, e.g. "LKR 12,300". */
+export const formatPrice = (n) => `LKR ${Math.round(Number(n || 0)).toLocaleString('en-LK')}`;

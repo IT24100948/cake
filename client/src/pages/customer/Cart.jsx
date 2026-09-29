@@ -7,7 +7,10 @@ export function CakeSummary({ cake, image, actions }) {
   return (
     <div className="cake-summary">
       <div className="row-between">
-        <strong>🎂 Custom cake request</strong>
+        <strong className="row" style={{ gap: '0.6rem' }}>
+          {cake.thumbnail && <img src={cake.thumbnail} alt="" style={{ width: 44, height: 44, borderRadius: 12, objectFit: 'cover' }} />}
+          Custom cake request
+        </strong>
         {actions}
       </div>
       <p className="text-sm mb-0 mt-1">

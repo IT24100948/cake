@@ -13,8 +13,9 @@ export function CartProvider({ children }) {
   const [items, setItems] = useState(Array.isArray(initial.items) ? initial.items : []);
   const [customCake, setCustomCake] = useState(initial.customCake || null);
   const [cakeImage, setCakeImage] = useState(null);
+  const [eventDate, setEventDate] = useState(initial.eventDate || '');
 
-  useEffect(() => { save(KEY, { items, customCake }); }, [items, customCake]);
+  useEffect(() => { save(KEY, { items, customCake, eventDate }); }, [items, customCake, eventDate]);
 
   const value = useMemo(() => {
     const add = (product, quantity = 1, notes = '') => {
@@ -39,16 +40,16 @@ export function CartProvider({ children }) {
     };
     const update = (key, patch) => setItems((cur) => cur.map((i) => (i.key === key ? { ...i, ...patch } : i)));
     const remove = (key) => setItems((cur) => cur.filter((i) => i.key !== key));
-    const clear = () => { setItems([]); setCustomCake(null); setCakeImage(null); };
+    const clear = () => { setItems([]); setCustomCake(null); setCakeImage(null); setEventDate(''); };
     const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
     const count = items.reduce((s, i) => s + i.quantity, 0) + (customCake ? 1 : 0);
     return {
-      items, customCake, cakeImage, subtotal, count,
-      add, update, remove, clear,
+      items, customCake, cakeImage, subtotal, count, eventDate,
+      add, update, remove, clear, setEventDate,
       setCustomCake: (cake, image) => { setCustomCake(cake); if (image !== undefined) setCakeImage(image); },
       removeCustomCake: () => { setCustomCake(null); setCakeImage(null); },
     };
-  }, [items, customCake, cakeImage]);
+  }, [items, customCake, cakeImage, eventDate]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

@@ -34,7 +34,8 @@ export default function CustomCake() {
   const onSubmit = (e) => {
     e.preventDefault();
     f.submit(async (v) => {
-      cart.setCustomCake({ ...v, weightKg: Number(v.weightKg), tiers: Number(v.tiers) }, image);
+      const { design, estimate, ...rest } = v; // hand edits make the builder estimate stale
+      cart.setCustomCake({ ...rest, weightKg: Number(v.weightKg), tiers: Number(v.tiers) }, image);
       toast.success('Custom cake added to your order');
       navigate('/cart');
     }, validate);

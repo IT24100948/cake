@@ -1,0 +1,6 @@
+server/uploads
+server/.env
+server/.seed-credentials
+server/coverage
+*.pdf
+*.jpeg

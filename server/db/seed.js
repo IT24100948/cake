@@ -10,7 +10,10 @@ const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { pool, query } = require('../src/config/db');
-const { uploadDir, isTest } = require('../src/config/env');
+const { isTest } = require('../src/config/env');
+
+// Seed artwork ships with the web app (client/public) so any host serves it as static files.
+const SEED_IMG_DIR = path.join(__dirname, '..', '..', 'client', 'public', 'seed-images');
 const { PERMISSIONS } = require('../src/config/constants');
 
 function makePassword() {
@@ -139,16 +142,15 @@ async function seed({ silent = false, withSampleOrders = true } = {}) {
     const r = await query('INSERT INTO categories (name, type, description) VALUES (?,?,?)', [name, type, desc]);
     catIds.push({ id: r.insertId, type });
   }
-  const seedImgDir = path.join(uploadDir, 'seed');
-  fs.mkdirSync(seedImgDir, { recursive: true });
+  fs.mkdirSync(SEED_IMG_DIR, { recursive: true });
   const productIds = {};
   for (const [ci, name, sku, price, stock, reorder, desc, color, icon] of PRODUCTS) {
     const file = `${sku.toLowerCase()}.svg`;
-    fs.writeFileSync(path.join(seedImgDir, file), productSvg(name, color, icon));
+    fs.writeFileSync(path.join(SEED_IMG_DIR, file), productSvg(name, color, icon));
     const r = await query(
       `INSERT INTO products (category_id, name, sku, description, price, image_url, product_type, stock_quantity, reorder_level, created_by, updated_by)
        VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-      [catIds[ci].id, name, sku, desc, price, `/uploads/seed/${file}`, catIds[ci].type, stock, reorder, staffIds['admin@devma.lk'], staffIds['admin@devma.lk']]
+      [catIds[ci].id, name, sku, desc, price, `/seed-images/${file}`, catIds[ci].type, stock, reorder, staffIds['admin@devma.lk'], staffIds['admin@devma.lk']]
     );
     productIds[sku] = r.insertId;
     if (stock > 0) {

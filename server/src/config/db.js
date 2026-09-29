@@ -1,14 +1,20 @@
 const mysql = require('mysql2/promise');
-const { db } = require('./env');
+const { db, dbPoolSize, dbTimezone } = require('./env');
 
 const pool = mysql.createPool({
   ...db,
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: dbPoolSize,
+  maxIdle: dbPoolSize,
+  idleTimeout: 60000,
+  enableKeepAlive: true,
   dateStrings: true,
   decimalNumbers: true,
-  timezone: 'local',
+  timezone: dbTimezone,
 });
+
+// NOW()/CURDATE() in SQL must agree with the app's business timezone, even on a UTC database server.
+pool.pool.on('connection', (conn) => conn.query(`SET time_zone = '${dbTimezone.replace(/[^0-9:+-]/g, '')}'`));
 
 /** Run a query on the pool and return the rows. */
 async function query(sql, params = []) {
