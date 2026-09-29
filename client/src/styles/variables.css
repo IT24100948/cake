@@ -1,0 +1,57 @@
+/* Devma Cake n' Party - design tokens */
+:root {
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Brand */
+  --berry-50: #fdf2f5;
+  --berry-100: #fbe3ea;
+  --berry-200: #f5c2d1;
+  --berry-500: #c8466d;
+  --berry-600: #b83b5e;
+  --berry-700: #962e4b;
+  --cocoa-900: #2e1f1b;
+  --cocoa-700: #54403a;
+  --cocoa-500: #8a756e;
+  --cream-50: #fffaf6;
+  --cream-100: #fbf3ec;
+  --cream-200: #f3e6da;
+  --gold-400: #e0b04f;
+
+  /* Semantic */
+  --bg: var(--cream-50);
+  --bg-muted: var(--cream-100);
+  --surface: #ffffff;
+  --border: #eadcd1;
+  --border-strong: #d7c4b7;
+  --text: var(--cocoa-900);
+  --text-muted: var(--cocoa-500);
+  --text-soft: var(--cocoa-700);
+  --primary: var(--berry-600);
+  --primary-hover: var(--berry-700);
+  --primary-soft: var(--berry-100);
+  --focus: #4f7cff;
+
+  --success: #2f7d4f;
+  --success-bg: #e3f4ea;
+  --warning: #9a6200;
+  --warning-bg: #fff2d6;
+  --danger: #b42318;
+  --danger-bg: #fde8e6;
+  --info: #255fa8;
+  --info-bg: #e3eefc;
+  --neutral: #5f5a57;
+  --neutral-bg: #efebe8;
+  --purple: #6941c6;
+  --purple-bg: #efe8fd;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(46, 31, 27, 0.06);
+  --shadow: 0 4px 16px rgba(46, 31, 27, 0.08);
+  --shadow-lg: 0 16px 40px rgba(46, 31, 27, 0.16);
+
+  --sidebar-w: 248px;
+  --header-h: 68px;
+}
