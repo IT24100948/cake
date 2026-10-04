@@ -52,7 +52,10 @@ module.exports = {
     secret: process.env.JWT_SECRET || (isTest ? 'test-secret' : ''),
     expiresIn: process.env.JWT_EXPIRES_IN || '8h',
   },
-  cookieSecure: process.env.COOKIE_SECURE === 'true',
+  // Secure cookies by default in production (HTTPS, e.g. Vercel). Docker on http://localhost sets COOKIE_SECURE=false.
+  cookieSecure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : process.env.NODE_ENV === 'production',
+  // Serve the built storefront (client/dist) from Express — used by the Docker image.
+  serveClient: process.env.SERVE_CLIENT === 'true',
   uploadDir: path.join(__dirname, '..', '..', 'uploads'),
   // When set (Vercel Blob store connected to the project), uploads go to Blob instead of local disk.
   blobToken: process.env.BLOB_READ_WRITE_TOKEN || '',

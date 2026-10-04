@@ -1,0 +1,65 @@
+# Devma Cake n' Party — full local stack.
+#   Windows:      double-click start.bat
+#   macOS/Linux:  ./start.sh
+#   or manually:  docker compose up -d --build   →   http://localhost:8080
+#
+# Demo-only credentials below are for local testing. Do not reuse them in production.
+
+name: devma
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: devma-root-2026
+      MYSQL_DATABASE: devma_cake_party
+      MYSQL_USER: devma
+      MYSQL_PASSWORD: devma-db-2026
+      TZ: Asia/Colombo
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      # Optional: connect with MySQL Workbench/DBeaver on localhost:3307 (user devma).
+      - "${MYSQL_PORT:-3307}:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -pdevma-root-2026 --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
+  app:
+    build: .
+    image: devma-cake-party:latest
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      PUBLIC_PORT: ${APP_PORT:-8080}
+      SERVE_CLIENT: "true"
+      COOKIE_SECURE: "false"
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: devma
+      DB_PASSWORD: devma-db-2026
+      DB_NAME: devma_cake_party
+      APP_TIMEZONE: Asia/Colombo
+      DB_TIMEZONE: "+05:30"
+      JWT_SECRET: devma-local-docker-secret-change-for-production
+      # Password for every demo login (admin, staff, support, customer)
+      SEED_PASSWORD: Devma@2026
+      # Set to "true" to wipe and re-seed the database on next start
+      RESET_DB: ${RESET_DB:-false}
+    volumes:
+      - uploads:/app/server/uploads
+    ports:
+      - "${APP_PORT:-8080}:8080"
+
+volumes:
+  mysql-data:
+  uploads:

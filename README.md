@@ -9,7 +9,22 @@ Web-based Cake and Party Decoration Management System for **Devma Cake n' Party*
 | Backend | Node.js + Express (REST API) |
 | Database | MySQL 8 |
 | Testing | Jest + Supertest (API), Postman collection |
-| Hosting | Vercel (static + serverless API), managed MySQL, Vercel Blob; CI on GitHub Actions |
+| Hosting | Docker (any machine) · Vercel (static + serverless API) with managed MySQL and Vercel Blob |
+
+## Quick start (any computer, one script)
+
+You only need **[Docker Desktop](https://www.docker.com/products/docker-desktop/)**. You don't need Node.js or MySQL.
+
+| Windows | macOS / Linux |
+|---|---|
+| Double-click **`start.bat`** | Run **`./start.sh`** |
+
+The script builds everything, creates and seeds the database, and opens http://localhost:8080.
+Every demo login uses the password **`Devma@2026`**: `admin@devma.lk`, `staff@devma.lk`, `support@devma.lk`, `customer@devma.lk`.
+
+The step-by-step guide for a fresh Windows PC, with a story-by-story test checklist and troubleshooting, is in **[docs/SETUP-GUIDE.md](docs/SETUP-GUIDE.md)**.
+
+The sections below are for **developers** running without Docker.
 
 ---
 
@@ -87,11 +102,11 @@ The tests use a separate `devma_test` database, which is reset automatically:
 npm test
 ```
 
-There are 35 API tests. They cover every user story US01–US24 and the reports. GitHub Actions runs the same tests on every push (see §5).
+There are 35 API tests. They cover every user story US01–US24 and the reports.
 
 For manual API testing, import `docs/Devma.postman_collection.json` into Postman.
 
-## 5. Deploy to Vercel (CI/CD)
+## 5. Deploy to Vercel
 
 Everything runs as **one Vercel project**:
 
@@ -110,7 +125,6 @@ The storefront and API share one domain, so the login cookies work with no CORS 
 | REST API | Vercel Function (`api/index.js`) | `vercel.json` rewrites `/api/*` |
 | MySQL | Any managed MySQL 8 | `DATABASE_URL` (+ `DB_SSL=true`) |
 | Image uploads | Vercel Blob | `BLOB_READ_WRITE_TOKEN` (set automatically) |
-| CI | GitHub Actions (`.github/workflows/ci.yml`) | Runs API tests on MySQL 8 and builds the client on every push/PR |
 | CD | Vercel Git integration | Preview deploy per branch/PR, production deploy from `master` |
 
 ### One-time setup (about 15 minutes)
@@ -143,11 +157,9 @@ DATABASE_URL='mysql://USER:PASSWORD@HOST:PORT/devma_cake_party' DB_SSL=true CONF
 
 **4. Enable image uploads:** in the Vercel project, go to **Storage → Create → Blob** and connect it to the project. This sets `BLOB_READ_WRITE_TOKEN`. Then redeploy once.
 
-**5. (Recommended) Protect `master`:** on GitHub, open *Settings → Branches → Add rule for `master`* and require the **CI / API tests + storefront build** check. Vercel production then only ever receives code that passed the tests.
-
 ### Day-to-day flow
 
-- **Push a branch or open a PR:** CI runs the tests, and Vercel posts a **preview URL** on the PR.
+- **Push a branch or open a PR:** Vercel posts a **preview URL** on the PR. Run `npm test` locally first.
 - **Merge to `master`:** Vercel deploys to **production** automatically.
 - **Roll back:** in Vercel → *Deployments*, pick an older deployment → **Promote to Production**.
 
@@ -258,9 +270,10 @@ Admins can create more roles, such as a delivery-only driver role, on the **Role
 
 ## 9. Project structure
 ```
+start.bat / start.sh    one-click Docker setup (also stop.*, reset.*; logic in scripts/)
+Dockerfile, docker-compose.yml  app image (API + built storefront) and MySQL
 api/index.js            Vercel serverless entry (wraps the Express app)
 vercel.json             build, routing and cache rules for Vercel
-.github/workflows/ci.yml  CI: API tests on MySQL 8 + client build
 server/
   db/schema.sql         MySQL schema (16 tables)
   db/seed.js            demo data (orders are created through the real order service)

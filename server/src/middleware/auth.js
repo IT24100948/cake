@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { query } = require('../config/db');
-const { jwt: jwtCfg, cookieSecure, isProd } = require('../config/env');
+const { jwt: jwtCfg, cookieSecure } = require('../config/env');
 const ApiError = require('../utils/ApiError');
 
 const STAFF_COOKIE = 'devma_staff';
@@ -9,7 +9,7 @@ const CUSTOMER_COOKIE = 'devma_customer';
 const cookieOptions = {
   httpOnly: true,
   sameSite: 'lax',
-  secure: cookieSecure || isProd,
+  secure: cookieSecure,
   path: '/',
 };
 
