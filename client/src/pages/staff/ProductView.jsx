@@ -24,7 +24,7 @@ export default function ProductView() {
       <div className="detail-layout">
         <div className="card">
           <div className="grid-2">
-            <img src={imageUrl(p.image_url)} alt={p.name} style={{ borderRadius: 12, border: '1px solid var(--border)' }} />
+            <img src={imageUrl(p.image_url, p.product_type)} alt={p.name} style={{ borderRadius: 12, border: '1px solid var(--border)' }} />
             <dl className="kv">
               <dt>SKU</dt><dd>{p.sku}</dd>
               <dt>Type</dt><dd>{p.product_type === 'CAKE' ? 'Cake' : 'Party decoration'}</dd>

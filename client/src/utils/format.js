@@ -82,7 +82,12 @@ export const ORDER_FLOW = {
 
 export const TIME_SLOTS = ['8am - 10am', '9am - 12pm', '12pm - 3pm', '3pm - 6pm', '6pm - 8pm'];
 
-export const imageUrl = (u) => u || '/favicon.svg';
+// Shown when a product has no image yet: a real photo for its type, never a placeholder graphic.
+const FALLBACK_PHOTO = {
+  CAKE: 'https://images.unsplash.com/photo-1558301211-0d8c8ddee6ec?auto=format&fit=crop&w=1200&h=900&q=80',
+  DECORATION: 'https://images.unsplash.com/photo-1529244927325-b3ef2247b9fb?auto=format&fit=crop&w=1200&h=900&q=80',
+};
+export const imageUrl = (u, type = 'CAKE') => u || FALLBACK_PHOTO[type] || FALLBACK_PHOTO.CAKE;
 
 /** Whole-rupee price for the storefront, e.g. "LKR 12,300". */
 export const formatPrice = (n) => `LKR ${Math.round(Number(n || 0)).toLocaleString('en-LK')}`;

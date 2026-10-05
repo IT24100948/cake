@@ -26,7 +26,7 @@ export default function ProductDetail() {
     <div className="stack">
       <Link to={`/shop?type=${p.product_type}`} className="text-sm">← Back to {p.product_type === 'CAKE' ? 'cakes' : 'decorations'}</Link>
       <div className="product-detail">
-        <div className="image"><img src={imageUrl(p.image_url)} alt={p.name} /></div>
+        <div className="image"><img src={imageUrl(p.image_url, p.product_type)} alt={p.name} /></div>
         <div>
           <span className="badge badge-primary badge-plain">{p.category_name}</span>
           <h1 className="mt-1">{p.name}</h1>

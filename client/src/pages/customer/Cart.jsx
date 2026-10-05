@@ -8,7 +8,7 @@ export function CakeSummary({ cake, image, actions }) {
     <div className="cake-summary">
       <div className="row-between">
         <strong className="row" style={{ gap: '0.6rem' }}>
-          {cake.thumbnail && <img src={cake.thumbnail} alt="" style={{ width: 44, height: 44, borderRadius: 12, objectFit: 'cover' }} />}
+          <img src={imageUrl(cake.thumbnail)} alt="" style={{ width: 44, height: 44, borderRadius: 12, objectFit: 'cover' }} />
           Custom cake request
         </strong>
         {actions}
@@ -59,7 +59,7 @@ export default function Cart() {
             <div className="card">
               {cart.items.map((i) => (
                 <div className="cart-item" key={i.key}>
-                  <img src={imageUrl(i.image)} alt="" />
+                  <img src={imageUrl(i.image, i.type)} alt="" />
                   <div>
                     <Link to={`/shop/${i.productId}`} className="strong">{i.name}</Link>
                     <div className="text-sm muted">{formatLKR(i.price)} each · {i.type === 'CAKE' ? 'Cake' : 'Decoration'}</div>

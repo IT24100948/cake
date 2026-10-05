@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6b3e26"/><stop offset="1" stop-color="#6b3e26" stop-opacity=".65"/></linearGradient></defs>
-<rect width="400" height="300" fill="url(#g)"/><rect x="90" y="150" width="220" height="90" rx="14" fill="#fff" opacity=".92"/><rect x="90" y="150" width="220" height="26" rx="12" fill="#fff"/><path d="M90 176q27 18 55 0t55 0 55 0 55 0" stroke="#6b3e26" stroke-width="8" fill="none" opacity=".55"/><rect x="194" y="104" width="12" height="44" rx="4" fill="#fff"/><ellipse cx="200" cy="96" rx="8" ry="12" fill="#ffd166"/>
-<text x="200" y="285" text-anchor="middle" font-family="Georgia, serif" font-size="15" fill="#fff" opacity=".9">Chocolate Fudge Birthday Cake (1kg)</text>
-</svg>

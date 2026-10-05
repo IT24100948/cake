@@ -392,7 +392,7 @@ export default function OrderDetail() {
                       <tr key={i.id}>
                         <td>
                           <div className="row" style={{ flexWrap: 'nowrap' }}>
-                            <img src={imageUrl(i.image_url)} alt="" className="table-thumb" />
+                            <img src={imageUrl(i.image_url, i.product_type)} alt="" className="table-thumb" />
                             <div><div className="cell-title">{i.product_name}</div><div className="cell-sub">{i.product_type === 'CAKE' ? 'Cake' : 'Decoration'}{i.notes ? ` · “${i.notes}”` : ''}</div></div>
                           </div>
                         </td>

@@ -133,7 +133,7 @@ export default function Products() {
                   <tr key={p.id} className={`clickable${p.is_available ? '' : ' row-muted'}`} onClick={() => navigate(`/staff/products/${p.id}`)}>
                     <td>
                       <div className="row" style={{ flexWrap: 'nowrap' }}>
-                        <img src={imageUrl(p.image_url)} alt="" className="table-thumb" />
+                        <img src={imageUrl(p.image_url, p.product_type)} alt="" className="table-thumb" />
                         <div><div className="cell-title">{p.name}</div><div className="cell-sub">{p.sku}</div></div>
                       </div>
                     </td>

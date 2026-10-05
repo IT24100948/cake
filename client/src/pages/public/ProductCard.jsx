@@ -17,7 +17,7 @@ export default function ProductCard({ product }) {
   return (
     <article className="product-card">
       <Link to={`/shop/${product.id}`} className="thumb" aria-hidden="true" tabIndex={-1}>
-        <img src={imageUrl(product.image_url)} alt="" loading="lazy" />
+        <img src={imageUrl(product.image_url, product.product_type)} alt="" loading="lazy" />
       </Link>
       <div className="body">
         <span className="cat">{product.category_name}</span>

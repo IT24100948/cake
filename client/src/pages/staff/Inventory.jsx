@@ -133,7 +133,7 @@ export default function Inventory() {
                   <tr key={p.id} className={p.is_low_stock ? 'row-warn' : ''}>
                     <td>
                       <div className="row" style={{ flexWrap: 'nowrap' }}>
-                        <img src={imageUrl(p.image_url)} alt="" className="table-thumb" />
+                        <img src={imageUrl(p.image_url, p.product_type)} alt="" className="table-thumb" />
                         <div><div className="cell-title">{p.name}</div><div className="cell-sub">{p.sku} · {p.category_name}</div></div>
                       </div>
                     </td>

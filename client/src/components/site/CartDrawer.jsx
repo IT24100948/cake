@@ -67,7 +67,7 @@ export default function CartDrawer() {
                 <div className="drawer-body">
                   {cake && (
                     <div className="drawer-line is-cake">
-                      <div className="drawer-thumb">{cake.thumbnail ? <img src={cake.thumbnail} alt="" /> : <LineIcon name="cake" size={30} stroke={1.2} />}</div>
+                      <div className="drawer-thumb"><img src={imageUrl(cake.thumbnail)} alt="" /></div>
                       <div className="drawer-info">
                         <strong>Custom {cake.flavor} cake</strong>
                         <span>{cake.design ? getSize(cake.design.size).label : `${cake.weightKg} kg`} · {cake.icingType}</span>
@@ -85,7 +85,7 @@ export default function CartDrawer() {
                   )}
                   {cart.items.map((i) => (
                     <div className="drawer-line" key={i.key}>
-                      <div className="drawer-thumb"><img src={imageUrl(i.image)} alt="" /></div>
+                      <div className="drawer-thumb"><img src={imageUrl(i.image, i.type)} alt="" /></div>
                       <div className="drawer-info">
                         <strong>{i.name}</strong>
                         <span>{formatLKR(i.price)} each{i.notes ? ` · “${i.notes}”` : ''}</span>

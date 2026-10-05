@@ -12,9 +12,8 @@ const bcrypt = require('bcryptjs');
 const { pool, query } = require('../src/config/db');
 const { isTest } = require('../src/config/env');
 
-// Seed artwork ships with the web app (client/public) so any host serves it as static files.
-const SEED_IMG_DIR = path.join(__dirname, '..', '..', 'client', 'public', 'seed-images');
 const { PERMISSIONS } = require('../src/config/constants');
+const { PRODUCT_PHOTOS } = require('./productPhotos');
 
 function makePassword() {
   if (process.env.SEED_PASSWORD) return process.env.SEED_PASSWORD;
@@ -39,46 +38,27 @@ const CATEGORIES = [
   ['Tableware & Candles', 'DECORATION', 'Candles, cake toppers, plates and cups'],
 ];
 
-// [category index, name, sku, price, stock, reorder, description, color, icon]
+// [category index, name, sku, price, stock, reorder, description] - photos are in productPhotos.js
 const PRODUCTS = [
-  [0, 'Chocolate Fudge Birthday Cake (1kg)', 'CK-CHOC-1KG', 4800, 8, 3, 'Rich chocolate sponge layered with fudge ganache and finished with chocolate curls.', '#6b3e26', 'cake'],
-  [0, 'Vanilla Rainbow Sprinkle Cake (1kg)', 'CK-VAN-RNB', 4200, 6, 3, 'Soft vanilla butter cake with rainbow sprinkles and buttercream swirls.', '#f4a6c1', 'cake'],
-  [0, 'Ribbon Cake (1kg)', 'CK-RIBBON', 3500, 10, 4, 'The Sri Lankan favourite - colourful layered ribbon cake with butter icing.', '#f7c873', 'cake'],
-  [0, 'Red Velvet Cream Cheese Cake (1kg)', 'CK-REDVEL', 5200, 2, 3, 'Velvety red sponge with tangy cream-cheese frosting.', '#b3243a', 'cake'],
-  [1, 'Two-Tier Floral Wedding Cake', 'CK-WED-2T', 28500, 2, 1, 'Elegant two-tier butter cake with sugar flowers. Serves about 60 guests.', '#e9dccd', 'tier'],
-  [1, 'Traditional Wedding Cake Pieces (50)', 'CK-WED-PCS', 12500, 4, 2, 'Rich fruit cake pieces wrapped in gold foil, boxed for guests.', '#c9a227', 'tier'],
-  [2, 'Assorted Cupcakes (Box of 12)', 'CK-CUP-12', 3000, 15, 5, 'A dozen vanilla and chocolate cupcakes with buttercream roses.', '#f2b5d4', 'cupcake'],
-  [2, 'Jar Cakes (Set of 6)', 'CK-JAR-6', 2700, 0, 3, 'Layered cake in jars - biscoff, chocolate and strawberry.', '#d98e5f', 'cupcake'],
-  [3, 'Pastel Latex Balloons (Pack of 25)', 'DC-BAL-PST25', 1200, 40, 10, 'Assorted pastel 12-inch latex balloons.', '#a7c7e7', 'balloon'],
-  [3, 'Gold Number Foil Balloon (32")', 'DC-BAL-NUM', 950, 30, 10, 'Large gold foil number balloon - specify the number in the item note.', '#d4af37', 'balloon'],
-  [3, 'Heart Foil Balloons (Set of 5)', 'DC-BAL-HRT', 1100, 6, 8, 'Red and pink heart-shaped foil balloons.', '#e0457b', 'balloon'],
-  [3, 'Balloon Arch Kit (100 pcs)', 'DC-BAL-ARCH', 4500, 12, 4, 'Complete balloon garland kit with arch strip and glue dots.', '#9b8ae6', 'balloon'],
-  [4, 'Happy Birthday Banner - Gold', 'DC-BAN-HBD', 850, 25, 8, 'Glitter gold "Happy Birthday" letter banner.', '#e3b448', 'banner'],
-  [4, 'Sequin Shimmer Backdrop Wall', 'DC-BAN-SEQ', 6500, 5, 2, 'Rose gold sequin shimmer panels for photo backdrops.', '#e8b4a0', 'banner'],
-  [4, 'Paper Bunting Flags (5m)', 'DC-BAN-BUNT', 600, 3, 6, 'Colourful paper triangle bunting, 5 metres.', '#5bc0be', 'banner'],
-  [5, 'Number Candles - Gold', 'DC-TBL-CNDL', 250, 60, 15, 'Gold glitter number candle (0-9) - specify the number in the item note.', '#f0c75e', 'candle'],
-  [5, 'Acrylic Cake Topper - Happy Birthday', 'DC-TBL-TOP', 750, 20, 5, 'Gold mirror acrylic "Happy Birthday" cake topper.', '#c79b3b', 'candle'],
-  [5, 'Party Tableware Set (10 guests)', 'DC-TBL-SET', 1800, 18, 5, 'Plates, cups, napkins and cutlery for 10 guests.', '#7fb7be', 'plate'],
+  [0, 'Chocolate Fudge Birthday Cake (1kg)', 'CK-CHOC-1KG', 4800, 8, 3, 'Rich chocolate sponge layered with fudge ganache and finished with chocolate curls.'],
+  [0, 'Vanilla Rainbow Sprinkle Cake (1kg)', 'CK-VAN-RNB', 4200, 6, 3, 'Soft vanilla butter cake with rainbow sprinkles and buttercream swirls.'],
+  [0, 'Ribbon Cake (1kg)', 'CK-RIBBON', 3500, 10, 4, 'The Sri Lankan favourite - colourful layered ribbon cake with butter icing.'],
+  [0, 'Red Velvet Cream Cheese Cake (1kg)', 'CK-REDVEL', 5200, 2, 3, 'Velvety red sponge with tangy cream-cheese frosting.'],
+  [1, 'Two-Tier Floral Wedding Cake', 'CK-WED-2T', 28500, 2, 1, 'Elegant two-tier butter cake with sugar flowers. Serves about 60 guests.'],
+  [1, 'Traditional Wedding Cake Pieces (50)', 'CK-WED-PCS', 12500, 4, 2, 'Rich fruit cake pieces wrapped in gold foil, boxed for guests.'],
+  [2, 'Assorted Cupcakes (Box of 12)', 'CK-CUP-12', 3000, 15, 5, 'A dozen vanilla and chocolate cupcakes with buttercream roses.'],
+  [2, 'Jar Cakes (Set of 6)', 'CK-JAR-6', 2700, 0, 3, 'Layered cake in jars - biscoff, chocolate and strawberry.'],
+  [3, 'Pastel Latex Balloons (Pack of 25)', 'DC-BAL-PST25', 1200, 40, 10, 'Assorted pastel 12-inch latex balloons.'],
+  [3, 'Gold Number Foil Balloon (32")', 'DC-BAL-NUM', 950, 30, 10, 'Large gold foil number balloon - specify the number in the item note.'],
+  [3, 'Heart Foil Balloons (Set of 5)', 'DC-BAL-HRT', 1100, 6, 8, 'Red and pink heart-shaped foil balloons.'],
+  [3, 'Balloon Arch Kit (100 pcs)', 'DC-BAL-ARCH', 4500, 12, 4, 'Complete balloon garland kit with arch strip and glue dots.'],
+  [4, 'Happy Birthday Banner - Gold', 'DC-BAN-HBD', 850, 25, 8, 'Glitter gold "Happy Birthday" letter banner.'],
+  [4, 'Sequin Shimmer Backdrop Wall', 'DC-BAN-SEQ', 6500, 5, 2, 'Rose gold sequin shimmer panels for photo backdrops.'],
+  [4, 'Paper Bunting Flags (5m)', 'DC-BAN-BUNT', 600, 3, 6, 'Colourful paper triangle bunting, 5 metres.'],
+  [5, 'Number Candles - Gold', 'DC-TBL-CNDL', 250, 60, 15, 'Gold glitter number candle (0-9) - specify the number in the item note.'],
+  [5, 'Acrylic Cake Topper - Happy Birthday', 'DC-TBL-TOP', 750, 20, 5, 'Gold mirror acrylic "Happy Birthday" cake topper.'],
+  [5, 'Party Tableware Set (10 guests)', 'DC-TBL-SET', 1800, 18, 5, 'Plates, cups, napkins and cutlery for 10 guests.'],
 ];
-
-const ICONS = {
-  cake: '<rect x="90" y="150" width="220" height="90" rx="14" fill="#fff" opacity=".92"/><rect x="90" y="150" width="220" height="26" rx="12" fill="#fff"/><path d="M90 176q27 18 55 0t55 0 55 0 55 0" stroke="COLOR" stroke-width="8" fill="none" opacity=".55"/><rect x="194" y="104" width="12" height="44" rx="4" fill="#fff"/><ellipse cx="200" cy="96" rx="8" ry="12" fill="#ffd166"/>',
-  tier: '<rect x="120" y="180" width="160" height="70" rx="10" fill="#fff" opacity=".95"/><rect x="145" y="125" width="110" height="58" rx="10" fill="#fff" opacity=".9"/><rect x="170" y="80" width="60" height="48" rx="8" fill="#fff" opacity=".85"/><circle cx="200" cy="72" r="10" fill="#f28ab2"/>',
-  cupcake: '<path d="M140 170h120l-18 80h-84z" fill="#fff" opacity=".9"/><path d="M130 172c0-50 30-80 70-80s70 30 70 80z" fill="#fff"/><circle cx="200" cy="86" r="11" fill="#e63946"/>',
-  balloon: '<ellipse cx="170" cy="120" rx="48" ry="58" fill="#fff" opacity=".92"/><ellipse cx="238" cy="140" rx="42" ry="52" fill="#fff" opacity=".75"/><path d="M170 178q-10 40 20 80M238 192q10 30-20 66" stroke="#fff" stroke-width="3" fill="none"/>',
-  banner: '<path d="M70 90q130 50 260 0" stroke="#fff" stroke-width="4" fill="none"/><path d="M92 99l24 62 22-54zM152 113l22 62 24-58zM214 116l22 60 22-62zM276 104l20 58 22-66z" fill="#fff" opacity=".9"/>',
-  candle: '<rect x="150" y="120" width="26" height="120" rx="6" fill="#fff"/><rect x="224" y="120" width="26" height="120" rx="6" fill="#fff" opacity=".85"/><ellipse cx="163" cy="104" rx="9" ry="14" fill="#ffd166"/><ellipse cx="237" cy="104" rx="9" ry="14" fill="#ffd166"/>',
-  plate: '<circle cx="200" cy="160" r="80" fill="#fff" opacity=".92"/><circle cx="200" cy="160" r="52" fill="none" stroke="COLOR" stroke-width="6" opacity=".4"/><rect x="92" y="95" width="10" height="130" rx="5" fill="#fff"/><rect x="298" y="95" width="10" height="130" rx="5" fill="#fff"/>',
-};
-
-function productSvg(name, color, icon) {
-  const art = ICONS[icon].replace(/COLOR/g, color);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${color}"/><stop offset="1" stop-color="${color}" stop-opacity=".65"/></linearGradient></defs>
-<rect width="400" height="300" fill="url(#g)"/>${art}
-<text x="200" y="285" text-anchor="middle" font-family="Georgia, serif" font-size="15" fill="#fff" opacity=".9">${name.replace(/&/g, '&amp;').slice(0, 42)}</text>
-</svg>`;
-}
 
 const fakeReq = (actor) => ({ ...actor, ip: '127.0.0.1', get: () => 'seed-script' });
 
@@ -142,15 +122,12 @@ async function seed({ silent = false, withSampleOrders = true } = {}) {
     const r = await query('INSERT INTO categories (name, type, description) VALUES (?,?,?)', [name, type, desc]);
     catIds.push({ id: r.insertId, type });
   }
-  fs.mkdirSync(SEED_IMG_DIR, { recursive: true });
   const productIds = {};
-  for (const [ci, name, sku, price, stock, reorder, desc, color, icon] of PRODUCTS) {
-    const file = `${sku.toLowerCase()}.svg`;
-    fs.writeFileSync(path.join(SEED_IMG_DIR, file), productSvg(name, color, icon));
+  for (const [ci, name, sku, price, stock, reorder, desc] of PRODUCTS) {
     const r = await query(
       `INSERT INTO products (category_id, name, sku, description, price, image_url, product_type, stock_quantity, reorder_level, created_by, updated_by)
        VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-      [catIds[ci].id, name, sku, desc, price, `/seed-images/${file}`, catIds[ci].type, stock, reorder, staffIds['admin@devma.lk'], staffIds['admin@devma.lk']]
+      [catIds[ci].id, name, sku, desc, price, PRODUCT_PHOTOS[sku] || null, catIds[ci].type, stock, reorder, staffIds['admin@devma.lk'], staffIds['admin@devma.lk']]
     );
     productIds[sku] = r.insertId;
     if (stock > 0) {
