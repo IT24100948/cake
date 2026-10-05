@@ -38,6 +38,14 @@ describe('EP01 - System User & Access Management', () => {
     newStaffId = res.body.staff.id;
   });
 
+  test('US01 - phone numbers typed with spaces or dashes are accepted and stored as digits', async () => {
+    const res = await admin.post('/api/staff').send({
+      fullName: 'Spaced Phone', email: 'spaced@devma.lk', phone: '+94 77-111 2224', roleId: 2, password: 'TempPass123',
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.staff.phone).toBe('+94771112224');
+  });
+
   test('US01 - validation errors and duplicate email', async () => {
     const bad = await admin.post('/api/staff').send({ fullName: 'A', email: 'bad', roleId: 0, password: 'short' });
     expect(bad.status).toBe(422);

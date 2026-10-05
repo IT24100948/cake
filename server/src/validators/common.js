@@ -16,6 +16,8 @@ const phoneRule = (field = 'phone', { optional = false } = {}) => {
   const chain = body(field);
   return (optional ? chain.optional({ values: 'falsy' }) : chain)
     .trim()
+    // Accept the way people actually type numbers ("077 123 4567", "+94-77-123-4567") and store digits only.
+    .customSanitizer((v) => String(v ?? '').replace(/[\s().-]/g, ''))
     .matches(/^(\+94|0)?\d{9}$/).withMessage('Enter a valid phone number (e.g. 0771234567)');
 };
 
