@@ -4,6 +4,7 @@ import { MotionConfig, useReducedMotion } from 'framer-motion';
 import Hero from './sections/Hero';
 import IcingDivider from './sections/IcingDivider';
 import TrustBar from './sections/TrustBar';
+import QuickLinks from './sections/QuickLinks';
 import Creations from './sections/Creations';
 import CakeBuilder from './sections/CakeBuilder';
 import Signature from './sections/Signature';
@@ -37,6 +38,7 @@ export default function Landing() {
         <Hero onBuild={() => scrollTo('build')} reduced={reduced} />
         <IcingDivider variant="drip-down" from="var(--blush)" to="var(--cream)" seed={5} height={130} />
         <TrustBar />
+        <QuickLinks />
         <Creations />
         <IcingDivider variant="cream-wave" from="var(--cream)" to="var(--ivory-blush)" seed={3} height={110} />
         <CakeBuilder config={config} setConfig={setConfig} reduced={reduced} />

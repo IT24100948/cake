@@ -201,6 +201,7 @@ export default function SiteHeader() {
                 )}
               </AnimatePresence>
             </button>
+            <Link to="/staff" className="pill pill-ghost pill-sm hdr-login">Staff / Admin</Link>
             {!customer && <Link to="/login" className="pill pill-primary pill-sm hdr-login">Login</Link>}
           </div>
         </div>
@@ -234,6 +235,8 @@ export default function SiteHeader() {
                   <Link to="/register" className="pill pill-ghost">Create account</Link>
                 </>
               )}
+              <Link to="/#quick-links" className="pill pill-ghost">All links</Link>
+              <Link to="/staff" className="pill pill-ghost">Staff / Admin</Link>
             </div>
           </motion.div>
         )}
