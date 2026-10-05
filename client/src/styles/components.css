@@ -214,3 +214,21 @@
 .section-title { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .section-title h1, .section-title h2 { margin: 0; }
 .page-sub { color: var(--text-muted); margin-top: 0.2rem; }
+
+/* ---------- Online payment (DevmaPay sandbox) ---------- */
+.choice-card:disabled { opacity: 0.55; cursor: not-allowed; background: var(--bg-muted); }
+.choice-card .choice-note { display: block; margin-top: 0.35rem; font-size: 0.8rem; color: var(--danger, #b42318); }
+.pay-amount { display: flex; justify-content: space-between; align-items: baseline; padding: 0.85rem 1rem; border-radius: var(--radius); background: var(--berry-50); border: 1px solid var(--berry-200); }
+.pay-amount strong { font-size: 1.35rem; }
+.pay-card-input { position: relative; }
+.pay-card-input .input { padding-right: 6.5rem; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+.pay-brand { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; color: var(--text-soft); text-transform: uppercase; }
+.pay-test-cards { border: 1px dashed var(--border-strong); border-radius: var(--radius); padding: 0.6rem 0.9rem; font-size: 0.88rem; }
+.pay-test-cards summary { cursor: pointer; font-weight: 600; }
+.pay-test-cards ul { list-style: none; margin: 0.6rem 0; padding: 0; display: grid; gap: 0.35rem; }
+.pay-test-cards li { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline; }
+.pay-test-cards .link-btn { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.pay-receipt { text-align: center; }
+.pay-receipt .kv { text-align: left; }
+.pay-receipt .check { width: 56px; height: 56px; margin: 0 auto; border-radius: 50%; background: var(--success-bg); color: var(--success); display: inline-flex; align-items: center; justify-content: center; font-size: 1.8rem; }
+.pay-callout { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: space-between; }

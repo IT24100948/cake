@@ -3,9 +3,10 @@ import { Link, useParams } from 'react-router-dom';
 import { myApi } from '../../api';
 import { useAsync } from '../../utils/useAsync';
 import { useToast } from '../../context/ToastContext';
-import { formatDate, formatDateTime, formatLKR, imageUrl, methodLabel, statusLabel } from '../../utils/format';
+import { formatDate, formatDateTime, formatLKR, imageUrl, paymentLabel, statusLabel } from '../../utils/format';
 import { ConfirmDialog, Empty, Field, Loading, StatusBadge } from '../../components/ui';
 import { CakeRequirementView, DeliveryView, OrderProgress, OrderTimeline, OrderTotals } from '../../components/OrderViews';
+import PayOnline from '../../components/PayOnline';
 
 // US18 / US24 - Order status, progress and history for the customer
 export default function MyOrderDetail() {
@@ -15,6 +16,7 @@ export default function MyOrderDetail() {
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [paying, setPaying] = useState(false);
 
   if (loading && !data) return <Loading />;
   if (error) return <Empty icon="📦" title="Order not found"><Link to="/my/orders">Back to my orders</Link></Empty>;
@@ -54,7 +56,18 @@ export default function MyOrderDetail() {
             {o.status === 'PENDING' && (
               <div className="alert alert-info mt-2">
                 We’re reviewing your order. {o.cakeRequirement ? 'We will confirm the custom cake price shortly. ' : ''}
+                {o.card_on_file ? `Your ${o.card_on_file.card_brand} card ending ${o.card_on_file.card_last4} will be charged when we confirm the final total. ` : ''}
                 You can cancel it until it is confirmed.
+              </div>
+            )}
+            {o.awaiting_prepayment && (
+              <div className="alert alert-warning mt-2 pay-callout">
+                <span>
+                  <strong>Payment needed to secure your {o.is_custom_cake ? 'cake' : 'order'}.</strong>{' '}
+                  {o.is_custom_cake ? 'Custom cakes are pre-orders: we start baking once it is paid.' : 'We start preparing it once it is paid.'}
+                  {o.last_payment_error && <span className="text-sm" style={{ display: 'block' }}>We couldn’t charge your {o.last_payment_error}</span>}
+                </span>
+                <button type="button" className="btn btn-primary" onClick={() => setPaying(true)}>Pay {formatLKR(o.balance_due)} now</button>
               </div>
             )}
           </>
@@ -97,14 +110,26 @@ export default function MyOrderDetail() {
         <div className="stack">
           <section className="card">
             <h2>Payment</h2>
+            <p className="text-sm muted">
+              {o.payment_option === 'ONLINE'
+                ? (o.is_custom_cake ? 'Pre-order · paid online in advance' : 'Paid online by card')
+                : `Cash on ${o.fulfillment_type === 'DELIVERY' ? 'delivery' : 'collection'}`}
+              {o.card_on_file && ` · ${o.card_on_file.card_brand} •••• ${o.card_on_file.card_last4}`}
+            </p>
             <OrderTotals order={o} />
+            {o.can_pay_online && (
+              <button type="button" className={`btn btn-block mt-2 ${o.payment_option === 'ONLINE' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setPaying(true)}>
+                {o.payment_option === 'ONLINE' ? `Pay ${formatLKR(o.balance_due)} online` : `Pay ${formatLKR(o.balance_due)} online instead`}
+              </button>
+            )}
             {o.payments.length > 0 && (
               <>
                 <hr />
-                <h3>Payments received</h3>
+                <h3>Payments{o.amount_refunded > 0 ? ' and refunds' : ''}</h3>
                 {o.payments.map((p) => (
                   <div className="summary-line text-sm" key={p.id}>
-                    <span>{formatDate(p.paid_at)} · {methodLabel(p.method)}</span><span>{formatLKR(p.amount)}</span>
+                    <span>{formatDate(p.paid_at)} · {p.kind === 'REFUND' ? 'Refund' : paymentLabel(p)}{p.kind === 'REFUND' && p.card_last4 ? ` to •••• ${p.card_last4}` : ''}</span>
+                    <span>{p.kind === 'REFUND' ? `− ${formatLKR(p.amount)}` : formatLKR(p.amount)}</span>
                   </div>
                 ))}
               </>
@@ -120,6 +145,10 @@ export default function MyOrderDetail() {
         </div>
       </div>
 
+      {paying && (
+        <PayOnline order={o} onClose={() => setPaying(false)} onStale={reload}
+          onPaid={() => { setPaying(false); toast.success('Payment received. Thank you!'); reload(); }} />
+      )}
       {cancelling && (
         <ConfirmDialog title="Cancel order?" message={`Order ${o.order_number} will be cancelled. This cannot be undone.`}
           confirmLabel="Cancel order" danger busy={busy} onConfirm={cancel} onClose={() => setCancelling(false)}>

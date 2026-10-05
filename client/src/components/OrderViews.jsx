@@ -76,8 +76,11 @@ export function OrderTotals({ order }) {
         <div className="summary-line"><span>Delivery fee</span><span>{order.status === 'PENDING' ? 'To be confirmed' : formatLKR(order.delivery_fee)}</span></div>
       )}
       <div className="summary-line total"><span>Total</span><span>{formatLKR(order.total_amount)}</span></div>
-      <div className="summary-line"><span>Paid</span><span className="success-text">{formatLKR(order.amount_paid)}</span></div>
-      <div className="summary-line strong"><span>Balance due</span><span>{formatLKR(order.balance_due)}</span></div>
+      <div className="summary-line"><span>Paid</span><span className="success-text">{formatLKR(order.amount_paid + (order.amount_refunded || 0))}</span></div>
+      {order.amount_refunded > 0 && <div className="summary-line"><span>Refunded</span><span>− {formatLKR(order.amount_refunded)}</span></div>}
+      {order.payment_status === 'REFUNDED'
+        ? <div className="summary-line strong"><span>Balance</span><span>Refunded in full</span></div>
+        : <div className="summary-line strong"><span>Balance due</span><span>{formatLKR(order.balance_due)}</span></div>}
     </div>
   );
 }

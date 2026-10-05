@@ -3,8 +3,9 @@ const ApiError = require('../utils/ApiError');
 const { paginate, pageMeta } = require('../utils/helpers');
 const { publicUrl } = require('../middleware/upload');
 const svc = require('../services/order.service');
+const gateway = require('../services/paymentGateway');
 
-const LIST_COLUMNS = `o.id, o.order_number, o.status, o.payment_status, o.fulfillment_type, o.event_date,
+const LIST_COLUMNS = `o.id, o.order_number, o.status, o.payment_status, o.payment_option, o.fulfillment_type, o.event_date,
   o.total_amount, o.created_at, o.updated_at,
   (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS item_count,
   EXISTS(SELECT 1 FROM cake_requirements cr WHERE cr.order_id = o.id) AS has_custom_cake`;
@@ -44,6 +45,17 @@ async function cancelMyOrder(req, res) {
   res.json({ message: 'Order cancelled' });
 }
 
+/** Customer pays the balance of their order online through the built-in gateway. */
+async function payMyOrder(req, res) {
+  const transaction = await svc.payOnline(req, req.params.id, req.body);
+  res.status(201).json({ transaction, order: await svc.getOrderDetail(req.params.id, { forCustomer: true }), message: 'Payment successful' });
+}
+
+/** The gateway's test cards, shown on the (prototype) payment form. */
+function testCards(req, res) {
+  res.json({ data: gateway.testCards() });
+}
+
 // ----- Staff side -----
 
 // US16 - View orders
@@ -70,7 +82,7 @@ async function list(req, res) {
   const sort = req.query.sort === 'event' ? 'o.event_date ASC, o.id' : 'o.created_at DESC, o.id DESC';
   const data = await query(
     `SELECT ${LIST_COLUMNS}, c.full_name AS customer_name, c.phone AS customer_phone,
-            (SELECT COALESCE(SUM(p.amount),0) FROM payments p WHERE p.order_id = o.id) AS amount_paid
+            (SELECT COALESCE(SUM(IF(p.kind = 'REFUND', -p.amount, p.amount)),0) FROM payments p WHERE p.order_id = o.id) AS amount_paid
        FROM orders o JOIN customers c ON c.id = o.customer_id ${whereSql}
       ORDER BY ${sort} LIMIT ? OFFSET ?`,
     [...params, pg.limit, pg.offset]
@@ -105,4 +117,4 @@ async function changeStatus(req, res) {
   res.json({ order: await svc.getOrderDetail(req.params.id), message: 'Order status updated' });
 }
 
-module.exports = { create, myOrders, myOrder, cancelMyOrder, list, getOne, update, confirm, changeStatus };
+module.exports = { create, myOrders, myOrder, cancelMyOrder, payMyOrder, testCards, list, getOne, update, confirm, changeStatus };

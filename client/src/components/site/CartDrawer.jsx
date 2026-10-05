@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCart } from '../../context/CartContext';
 import { useCartUI } from '../../context/CartUIContext';
-import { formatPrice as formatLKR, imageUrl, isoDate } from '../../utils/format';
+import { CUSTOM_CAKE_LEAD_DAYS, formatPrice as formatLKR, imageUrl, isoDate } from '../../utils/format';
 import { getSize } from '../../landing/cakeOptions';
 import LineIcon from './LineIcon';
 
@@ -16,7 +16,7 @@ export default function CartDrawer() {
   const cake = cart.customCake;
   const empty = cart.items.length === 0 && !cake;
   const estimate = cake?.estimate || 0;
-  const minDate = isoDate(cake ? 3 : 1);
+  const minDate = isoDate(cake ? CUSTOM_CAKE_LEAD_DAYS : 1);
 
   useEffect(() => {
     if (!open) return undefined;

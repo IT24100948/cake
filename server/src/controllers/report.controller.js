@@ -12,9 +12,9 @@ async function summary(req, res) {
        (SELECT COUNT(*) FROM orders WHERE status = 'PENDING') AS pending_orders,
        (SELECT COUNT(*) FROM orders WHERE status NOT IN ('COMPLETED','CANCELLED','REJECTED','PENDING')) AS in_progress_orders,
        (SELECT COUNT(*) FROM orders WHERE event_date = ? AND status NOT IN ${EXCLUDED}) AS due_today,
-       (SELECT COALESCE(SUM(amount),0) FROM payments WHERE DATE(paid_at) = ?) AS revenue_today,
-       (SELECT COALESCE(SUM(amount),0) FROM payments WHERE YEAR(paid_at) = YEAR(CURDATE()) AND MONTH(paid_at) = MONTH(CURDATE())) AS revenue_month,
-       (SELECT COALESCE(SUM(o.total_amount - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.order_id = o.id),0)),0)
+       (SELECT COALESCE(SUM(IF(kind = 'REFUND', -amount, amount)),0) FROM payments WHERE DATE(paid_at) = ?) AS revenue_today,
+       (SELECT COALESCE(SUM(IF(kind = 'REFUND', -amount, amount)),0) FROM payments WHERE YEAR(paid_at) = YEAR(CURDATE()) AND MONTH(paid_at) = MONTH(CURDATE())) AS revenue_month,
+       (SELECT COALESCE(SUM(o.total_amount - COALESCE((SELECT SUM(IF(p.kind = 'REFUND', -p.amount, p.amount)) FROM payments p WHERE p.order_id = o.id),0)),0)
           FROM orders o WHERE o.status NOT IN ('PENDING','CANCELLED','REJECTED') AND o.payment_status IN ('UNPAID','PARTIALLY_PAID')) AS outstanding_balance,
        (SELECT COUNT(*) FROM products WHERE stock_quantity <= reorder_level) AS low_stock_products,
        (SELECT COUNT(*) FROM customers) AS total_customers,
@@ -29,14 +29,14 @@ async function ordersByStatus(req, res) {
   res.json({ data });
 }
 
-/** Sales = payments received per day (defaults to the last 30 days). */
+/** Sales = payments received minus refunds, per day (defaults to the last 30 days). */
 async function sales(req, res) {
   const to = req.query.to || toDateString();
   const fromDefault = new Date();
   fromDefault.setDate(fromDefault.getDate() - 29);
   const from = req.query.from || toDateString(fromDefault);
   const payments = await query(
-    `SELECT DATE_FORMAT(paid_at, '%Y-%m-%d') AS day, SUM(amount) AS revenue, COUNT(*) AS payments
+    `SELECT DATE_FORMAT(paid_at, '%Y-%m-%d') AS day, SUM(IF(kind = 'REFUND', -amount, amount)) AS revenue, SUM(kind = 'PAYMENT') AS payments
        FROM payments WHERE paid_at BETWEEN ? AND ? GROUP BY day ORDER BY day`,
     [`${from} 00:00:00`, `${to} 23:59:59`]
   );
@@ -54,7 +54,7 @@ async function sales(req, res) {
     series.push({ day, revenue: Number(p?.revenue || 0), orders: Number(o?.orders || 0), order_value: Number(o?.order_value || 0) });
   }
   const [byMethod, byType] = await Promise.all([
-    query(`SELECT method, SUM(amount) AS amount, COUNT(*) AS count FROM payments WHERE paid_at BETWEEN ? AND ? GROUP BY method`,
+    query(`SELECT method, SUM(IF(kind = 'REFUND', -amount, amount)) AS amount, SUM(kind = 'PAYMENT') AS count FROM payments WHERE paid_at BETWEEN ? AND ? GROUP BY method`,
       [`${from} 00:00:00`, `${to} 23:59:59`]),
     query(`SELECT oi.product_type, SUM(oi.line_total) AS amount FROM order_items oi JOIN orders o ON o.id = oi.order_id
             WHERE o.created_at BETWEEN ? AND ? AND o.status NOT IN ${EXCLUDED} GROUP BY oi.product_type`,

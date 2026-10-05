@@ -1,12 +1,21 @@
 const app = require('./app');
 const { port } = require('./config/env');
 const { pool } = require('./config/db');
+const { migrate } = require('../db/migrate');
 
 async function start() {
   try {
     await pool.query('SELECT 1');
   } catch (err) {
     console.error(`Cannot connect to MySQL: ${err.message}\nCheck the DB_* settings in server/.env and run "npm run setup".`);
+    process.exit(1);
+  }
+  try {
+    // Bring databases created by older versions up to date (safe to run every time).
+    const changes = await migrate(async (sql, params) => (await pool.query(sql, params))[0]);
+    if (changes.length) console.log(`Database updated: ${changes.join(', ')}`);
+  } catch (err) {
+    console.error(`Database update failed: ${err.message}`);
     process.exit(1);
   }
   // Express 5 reports listen errors (e.g. port already in use) to this callback.

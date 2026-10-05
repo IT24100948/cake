@@ -36,19 +36,19 @@ describe('EP03 - Customer & Cake Order Management', () => {
   });
 
   test('US15 - order validation: empty order, past date, missing address, over-stock', async () => {
-    const empty = await customer.post('/api/orders').send({ items: [], fulfillmentType: 'COLLECTION', eventDate: dayOffset(3) });
+    const empty = await customer.post('/api/orders').send({ items: [], fulfillmentType: 'COLLECTION', paymentOption: 'CASH_ON_DELIVERY', eventDate: dayOffset(3) });
     expect(empty.status).toBe(422);
-    const past = await customer.post('/api/orders').send({ items: [{ productId: await productId('CK-RIBBON'), quantity: 1 }], fulfillmentType: 'COLLECTION', eventDate: dayOffset(0) });
+    const past = await customer.post('/api/orders').send({ items: [{ productId: await productId('CK-RIBBON'), quantity: 1 }], fulfillmentType: 'COLLECTION', paymentOption: 'CASH_ON_DELIVERY', eventDate: dayOffset(0) });
     expect(past.status).toBe(422);
     expect(past.body.errors.eventDate).toBeDefined();
-    const noAddr = await customer.post('/api/orders').send({ items: [{ productId: await productId('CK-RIBBON'), quantity: 1 }], fulfillmentType: 'DELIVERY', eventDate: dayOffset(3) });
+    const noAddr = await customer.post('/api/orders').send({ items: [{ productId: await productId('CK-RIBBON'), quantity: 1 }], fulfillmentType: 'DELIVERY', paymentOption: 'CASH_ON_DELIVERY', eventDate: dayOffset(3) });
     expect(noAddr.status).toBe(422);
     expect(noAddr.body.errors['delivery.address']).toBeDefined();
-    const over = await customer.post('/api/orders').send({ items: [{ productId: await productId('CK-REDVEL'), quantity: 50 }], fulfillmentType: 'COLLECTION', eventDate: dayOffset(3) });
+    const over = await customer.post('/api/orders').send({ items: [{ productId: await productId('CK-REDVEL'), quantity: 50 }], fulfillmentType: 'COLLECTION', paymentOption: 'CASH_ON_DELIVERY', eventDate: dayOffset(3) });
     expect(over.status).toBe(422);
-    const outOfStock = await customer.post('/api/orders').send({ items: [{ productId: await productId('CK-JAR-6'), quantity: 1 }], fulfillmentType: 'COLLECTION', eventDate: dayOffset(3) });
+    const outOfStock = await customer.post('/api/orders').send({ items: [{ productId: await productId('CK-JAR-6'), quantity: 1 }], fulfillmentType: 'COLLECTION', paymentOption: 'CASH_ON_DELIVERY', eventDate: dayOffset(3) });
     expect(outOfStock.status).toBe(422);
-    const unavailable = await customer.post('/api/orders').send({ items: [{ productId: await productId('CK-WED-PCS'), quantity: 1 }], fulfillmentType: 'COLLECTION', eventDate: dayOffset(3) });
+    const unavailable = await customer.post('/api/orders').send({ items: [{ productId: await productId('CK-WED-PCS'), quantity: 1 }], fulfillmentType: 'COLLECTION', paymentOption: 'CASH_ON_DELIVERY', eventDate: dayOffset(3) });
     expect(unavailable.status).toBe(422);
   });
 
@@ -63,7 +63,10 @@ describe('EP03 - Customer & Cake Order Management', () => {
         occasion: 'Birthday', flavor: 'Chocolate', weightKg: 2, shape: 'Round', tiers: 1,
         icingType: 'Buttercream', colors: 'Blue', theme: 'Space', messageOnCake: 'Happy 5th Birthday Dinuk',
       },
-      fulfillmentType: 'DELIVERY', eventDate: dayOffset(4), notes: 'Ring the bell twice',
+      // Custom cakes are paid online: the card is verified now and charged on confirmation. This test card
+      // passes verification but is declined when charged, so the order is left awaiting payment.
+      fulfillmentType: 'DELIVERY', paymentOption: 'ONLINE', eventDate: dayOffset(4), notes: 'Ring the bell twice',
+      card: { cardholderName: 'Nethmi Test', cardNumber: '4000000000009995', expMonth: 12, expYear: new Date().getFullYear() + 2, cvc: '123' },
       delivery: { address: '2 Main St', city: 'Galle', preferredTimeSlot: '9am - 12pm' },
     };
     const res = await customer.post('/api/orders').field('payload', JSON.stringify(payload)).attach('referenceImage', png, { filename: 'ref.png', contentType: 'image/png' });
@@ -82,7 +85,7 @@ describe('EP03 - Customer & Cake Order Management', () => {
     expect(await stockOf('DC-BAL-PST25')).toBe(40);
 
     const simple = await customer.post('/api/orders').send({
-      items: [{ productId: await productId('CK-RIBBON'), quantity: 1 }], fulfillmentType: 'COLLECTION', eventDate: dayOffset(2),
+      items: [{ productId: await productId('CK-RIBBON'), quantity: 1 }], fulfillmentType: 'COLLECTION', paymentOption: 'CASH_ON_DELIVERY', eventDate: dayOffset(2),
     });
     simpleOrderId = simple.body.order.id;
   });
@@ -128,7 +131,10 @@ describe('EP03 - Customer & Cake Order Management', () => {
       expect(res.body.order.total_amount).toBe(3 * 1200 + 250 + 6500 + 400);
       expect(await stockOf('DC-BAL-PST25')).toBe(37);
       expect(await stockOf('DC-TBL-CNDL')).toBe(59);
-      expect(await unread(customer)).toBe(before + 1);
+      // "Order confirmed", then "Payment failed": the card from checkout was charged and declined.
+      expect(await unread(customer)).toBe(before + 2);
+      expect(res.body.order).toMatchObject({ payment_status: 'UNPAID', awaiting_prepayment: true });
+      expect(res.body.order.last_payment_error).toMatch(/insufficient funds/);
       const again = await staff.patch(`/api/orders/${orderId}/confirm`).send({ cakeQuote: 1 });
       expect(again.status).toBe(400);
     });
@@ -145,8 +151,13 @@ describe('EP03 - Customer & Cake Order Management', () => {
       expect(pending.status).toBe(400);
       const noRef = await staff.post(`/api/orders/${orderId}/payments`).send({ amount: 1000, method: 'BANK_TRANSFER' });
       expect(noRef.status).toBe(422);
-      const over = await staff.post(`/api/orders/${orderId}/payments`).send({ amount: 999999, method: 'CASH' });
+      const over = await staff.post(`/api/orders/${orderId}/payments`).send({ amount: 999999, method: 'ONLINE_TRANSFER', referenceNo: 'X-1' });
       expect(over.status).toBe(422);
+      expect(over.body.errors.amount).toBeDefined();
+      // Custom cakes are pre-paid online: staff cannot take cash for them.
+      const cash = await staff.post(`/api/orders/${orderId}/payments`).send({ amount: 1000, method: 'CASH' });
+      expect(cash.status).toBe(422);
+      expect(cash.body.errors.method).toMatch(/pre-orders paid online/);
       const part = await staff.post(`/api/orders/${orderId}/payments`).send({ amount: 5000, method: 'BANK_TRANSFER', referenceNo: 'BOC-1' });
       expect(part.status).toBe(201);
       expect(part.body.order.payment_status).toBe('PARTIALLY_PAID');
@@ -176,15 +187,20 @@ describe('EP03 - Customer & Cake Order Management', () => {
       expect(board.body.data.map((d) => d.order_id)).toContain(orderId);
     });
 
-    test('US23 - status moves through to completion; completion requires full payment', async () => {
+    test('US23 - a pre-ordered custom cake is prepared only once paid online, then moves through to completion', async () => {
+      const early = await staff.patch(`/api/orders/${orderId}/status`).send({ status: 'IN_PREPARATION' });
+      expect(early.status).toBe(400);
+      expect(early.body.message).toMatch(/paid online in advance/);
+      const pay = await customer.post(`/api/my/orders/${orderId}/pay`).send({
+        cardholderName: 'Nethmi Updated', cardNumber: '4242 4242 4242 4242', expMonth: 12, expYear: new Date().getFullYear() + 3, cvc: '123',
+        amount: 5750, idempotencyKey: 'test-us23-balance',
+      });
+      expect(pay.status).toBe(201);
+      expect(pay.body.order.payment_status).toBe('PAID');
       for (const s of ['IN_PREPARATION', 'READY', 'OUT_FOR_DELIVERY']) {
         const r = await staff.patch(`/api/orders/${orderId}/status`).send({ status: s });
         expect(r.status).toBe(200);
       }
-      const early = await staff.patch(`/api/orders/${orderId}/status`).send({ status: 'COMPLETED' });
-      expect(early.status).toBe(400);
-      expect(early.body.message).toMatch(/fully paid/);
-      await staff.post(`/api/orders/${orderId}/payments`).send({ amount: 5750, method: 'CASH' }).expect(201);
       const delivery = (await staff.get(`/api/orders/${orderId}`)).body.order.delivery;
       const done = await staff.patch(`/api/deliveries/${delivery.id}/status`).send({ status: 'DELIVERED' });
       expect(done.status).toBe(200);
@@ -214,7 +230,7 @@ describe('EP03 - Customer & Cake Order Management', () => {
 
     test('Cancelling a confirmed order restores stock; customers can cancel only pending orders', async () => {
       const staffOrder = await customer.post('/api/orders').send({
-        items: [{ productId: await productId('DC-BAL-ARCH'), quantity: 2 }], fulfillmentType: 'COLLECTION', eventDate: dayOffset(6),
+        items: [{ productId: await productId('DC-BAL-ARCH'), quantity: 2 }], fulfillmentType: 'COLLECTION', paymentOption: 'CASH_ON_DELIVERY', eventDate: dayOffset(6),
       });
       const id = staffOrder.body.order.id;
       await staff.patch(`/api/orders/${id}/confirm`).send({}).expect(200);
@@ -232,7 +248,7 @@ describe('EP03 - Customer & Cake Order Management', () => {
 
     test('Confirmation fails cleanly when stock ran out after the order was placed', async () => {
       const o = await customer.post('/api/orders').send({
-        items: [{ productId: await productId('CK-REDVEL'), quantity: 2 }], fulfillmentType: 'COLLECTION', eventDate: dayOffset(5),
+        items: [{ productId: await productId('CK-REDVEL'), quantity: 2 }], fulfillmentType: 'COLLECTION', paymentOption: 'CASH_ON_DELIVERY', eventDate: dayOffset(5),
       });
       const admin = await staffAgent();
       await admin.post(`/api/inventory/${await productId('CK-REDVEL')}/adjust`).send({ type: 'ADJUSTMENT', mode: 'SET', quantity: 1, reason: 'Sold in shop' }).expect(200);

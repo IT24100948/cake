@@ -36,7 +36,11 @@ export default function MyOrders() {
                   <div className="text-sm muted">
                     Placed {formatDate(o.created_at)} · Needed {formatDate(o.event_date)} · {o.fulfillment_type === 'DELIVERY' ? 'Delivery' : 'Collection'}
                     {' · '}{o.item_count} item(s){o.has_custom_cake ? ' + custom cake' : ''}
+                    {' · '}{o.payment_option === 'ONLINE' ? 'Pay online' : 'Cash on delivery'}
                   </div>
+                  {o.payment_option === 'ONLINE' && o.status === 'CONFIRMED' && o.payment_status !== 'PAID' && (
+                    <div className="text-sm strong" style={{ color: 'var(--warning)' }}>Payment due: open the order to pay online</div>
+                  )}
                 </div>
                 <div className="row">
                   <StatusBadge status={o.status} />

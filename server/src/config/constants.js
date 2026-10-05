@@ -45,6 +45,22 @@ const ORDER_TRANSITIONS = {
 
 const PAYMENT_STATUS = ['UNPAID', 'PARTIALLY_PAID', 'PAID', 'REFUNDED'];
 const PAYMENT_METHODS = ['CASH', 'BANK_TRANSFER', 'CARD', 'ONLINE_TRANSFER'];
+
+/**
+ * How the customer pays (chosen at checkout).
+ *  ONLINE            - card payment through the gateway once the order is confirmed, before preparation starts.
+ *  CASH_ON_DELIVERY  - cash when the order is delivered or collected. Not available for custom cakes.
+ */
+const PAYMENT_OPTIONS = ['ONLINE', 'CASH_ON_DELIVERY'];
+/** Payment methods staff may record by hand for each option (online card payments come only from the gateway). */
+const STAFF_PAYMENT_METHODS = {
+  ONLINE: ['BANK_TRANSFER', 'ONLINE_TRANSFER'],
+  CASH_ON_DELIVERY: ['CASH', 'CARD', 'BANK_TRANSFER', 'ONLINE_TRANSFER'],
+};
+/** Custom cakes are pre-orders: they need this many days' notice. */
+const CUSTOM_CAKE_LEAD_DAYS = 3;
+/** Order statuses in which the customer can pay online. */
+const PAYABLE_STATUSES = ['CONFIRMED', 'IN_PREPARATION', 'READY', 'OUT_FOR_DELIVERY', 'READY_FOR_COLLECTION'];
 const FULFILLMENT_TYPES = ['DELIVERY', 'COLLECTION'];
 const DELIVERY_STATUS = {
   DELIVERY: ['PENDING', 'SCHEDULED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'FAILED'],
@@ -66,6 +82,8 @@ const STATUS_LABELS = {
   PARTIALLY_PAID: 'Partially paid',
   PAID: 'Paid',
   REFUNDED: 'Refunded',
+  ONLINE: 'Pay online',
+  CASH_ON_DELIVERY: 'Cash on delivery',
   SCHEDULED: 'Scheduled',
   DELIVERED: 'Delivered',
   COLLECTED: 'Collected',
@@ -77,5 +95,6 @@ const LOGIN_LOCK_MINUTES = 15;
 
 module.exports = {
   PERMISSIONS, ORDER_STATUS, ORDER_TRANSITIONS, PAYMENT_STATUS, PAYMENT_METHODS,
+  PAYMENT_OPTIONS, STAFF_PAYMENT_METHODS, CUSTOM_CAKE_LEAD_DAYS, PAYABLE_STATUSES,
   FULFILLMENT_TYPES, DELIVERY_STATUS, STATUS_LABELS, LOGIN_MAX_ATTEMPTS, LOGIN_LOCK_MINUTES,
 };

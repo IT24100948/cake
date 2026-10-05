@@ -4,7 +4,10 @@ const { logAudit } = require('../utils/audit');
 const { notifyCustomer } = require('../utils/notify');
 const { generateOrderNumber } = require('../utils/orderNumber');
 const { money, toDateString, formatLKR } = require('../utils/helpers');
-const { ORDER_TRANSITIONS, STATUS_LABELS } = require('../config/constants');
+const {
+  ORDER_TRANSITIONS, STATUS_LABELS, STAFF_PAYMENT_METHODS, CUSTOM_CAKE_LEAD_DAYS, PAYABLE_STATUSES,
+} = require('../config/constants');
+const gateway = require('./paymentGateway');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -16,14 +19,17 @@ async function lockOrder(conn, orderId) {
   return order;
 }
 
+/** Net amount paid on an order: payments received minus refunds given. */
 async function paidAmount(conn, orderId) {
-  const [row] = await conn.q('SELECT COALESCE(SUM(amount),0) AS paid FROM payments WHERE order_id = ?', [orderId]);
+  const [row] = await conn.q(
+    "SELECT COALESCE(SUM(IF(kind = 'REFUND', -amount, amount)),0) AS paid FROM payments WHERE order_id = ?", [orderId]
+  );
   return money(row.paid);
 }
 
-/** Derives the payment status from payments recorded against the order total. */
-function derivePaymentStatus(paid, total) {
-  if (paid <= 0) return 'UNPAID';
+/** Derives the payment status from the net amount paid against the order total. */
+function derivePaymentStatus(paid, total, refunded = 0) {
+  if (paid <= 0) return refunded > 0 ? 'REFUNDED' : 'UNPAID';
   if (paid + 0.001 < total) return 'PARTIALLY_PAID';
   return 'PAID';
 }
@@ -78,9 +84,24 @@ async function restoreStock(conn, order, staffId) {
   await conn.q('UPDATE orders SET stock_deducted = 0 WHERE id = ?', [order.id]);
 }
 
+/** What the customer is told about paying when their order is confirmed. */
+function paymentInstruction(order) {
+  if (order.payment_option === 'ONLINE') {
+    if (order.payment_method_id) return ' The card you added at checkout is charged for this total now.';
+    return ' Please pay online from your order page to secure it: we start preparing as soon as payment is received.';
+  }
+  return ` Please pay ${formatLKR(order.total_amount)} in cash on ${order.fulfillment_type === 'DELIVERY' ? 'delivery' : 'collection'}.`;
+}
+
+const dateOffset = (days) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return toDateString(d);
+};
+
 function statusMessage(order, status, note) {
   const base = {
-    CONFIRMED: `Your order ${order.order_number} has been confirmed. Total: ${formatLKR(order.total_amount)}.`,
+    CONFIRMED: `Your order ${order.order_number} has been confirmed. Total: ${formatLKR(order.total_amount)}.${paymentInstruction(order)}`,
     IN_PREPARATION: `We have started preparing your order ${order.order_number}.`,
     READY: `Your order ${order.order_number} is ready.`,
     OUT_FOR_DELIVERY: `Your order ${order.order_number} is out for delivery.`,
@@ -112,6 +133,46 @@ async function createOrder(req, payload, referenceImageUrl) {
   if (!items.length && !cake) {
     throw ApiError.unprocessable('Your order is empty', { items: 'Add at least one product or a custom cake request' });
   }
+  const paymentOption = payload.paymentOption;
+  if (!['ONLINE', 'CASH_ON_DELIVERY'].includes(paymentOption)) {
+    throw ApiError.unprocessable('Choose how you will pay', { paymentOption: 'Choose online payment or cash on delivery' });
+  }
+  if (cake) {
+    // Custom cakes are made to order: pre-ordered with notice and paid online in advance.
+    if (paymentOption !== 'ONLINE') {
+      throw ApiError.unprocessable('Custom cakes must be paid online', {
+        paymentOption: 'Custom cakes are pre-orders and are paid online in advance. Cash on delivery is available for orders without a custom cake.',
+      });
+    }
+    if (String(payload.eventDate) < dateOffset(CUSTOM_CAKE_LEAD_DAYS)) {
+      throw ApiError.unprocessable('Custom cakes need more notice', {
+        eventDate: `Custom cakes are pre-orders: choose a date at least ${CUSTOM_CAKE_LEAD_DAYS} days from today.`,
+      });
+    }
+  }
+
+  // Paying online needs a card at checkout. The gateway verifies it now (no money taken) and gives a
+  // token; the card is charged automatically when the order is confirmed and its total is final.
+  let savedCard = null;
+  if (paymentOption === 'ONLINE') {
+    const { card, errors } = gateway.validateCard(payload.card || {});
+    if (errors) {
+      throw ApiError.unprocessable('Enter your card details to pay online',
+        Object.fromEntries(Object.entries(errors).map(([k, v]) => [`card.${k}`, v])));
+    }
+    const verification = gateway.verify(card);
+    if (!verification.approved) {
+      await logAudit(req, 'PAYMENT_CARD_DECLINED', {
+        actor: { type: 'CUSTOMER', id: customer.id, name: customer.full_name },
+        details: { stage: 'checkout', card: `${card.brand} ending ${card.last4}`, failureCode: verification.failureCode },
+      });
+      const err = new ApiError(402, `${verification.message} Your order has not been placed.`);
+      err.code = verification.failureCode;
+      throw err;
+    }
+    const year = Number(payload.card.expYear) < 100 ? 2000 + Number(payload.card.expYear) : Number(payload.card.expYear);
+    savedCard = { ...card, token: verification.token, profile: verification.profile, expMonth: Number(payload.card.expMonth), expYear: year };
+  }
 
   const orderId = await withTransaction(async (conn) => {
     // Validate items against current catalog; snapshot names and prices.
@@ -133,10 +194,19 @@ async function createOrder(req, payload, referenceImageUrl) {
 
     const subtotal = money(lines.reduce((s, l) => s + Number(l.product.price) * l.quantity, 0));
     const orderNumber = await generateOrderNumber(conn);
+    let paymentMethodId = null;
+    if (savedCard) {
+      const pm = await conn.q(
+        `INSERT INTO payment_methods (customer_id, gateway_token, card_brand, card_last4, card_holder, exp_month, exp_year, sandbox_outcome)
+         VALUES (?,?,?,?,?,?,?,?)`,
+        [customer.id, savedCard.token, savedCard.brand, savedCard.last4, savedCard.holder, savedCard.expMonth, savedCard.expYear, savedCard.profile]
+      );
+      paymentMethodId = pm.insertId;
+    }
     const r = await conn.q(
-      `INSERT INTO orders (order_number, customer_id, fulfillment_type, event_date, subtotal, total_amount, customer_notes)
-       VALUES (?,?,?,?,?,?,?)`,
-      [orderNumber, customer.id, payload.fulfillmentType, payload.eventDate, subtotal, subtotal, payload.notes || null]
+      `INSERT INTO orders (order_number, customer_id, fulfillment_type, payment_option, payment_method_id, event_date, subtotal, total_amount, customer_notes)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
+      [orderNumber, customer.id, payload.fulfillmentType, paymentOption, paymentMethodId, payload.eventDate, subtotal, subtotal, payload.notes || null]
     );
     const id = r.insertId;
 
@@ -174,7 +244,9 @@ async function createOrder(req, payload, referenceImageUrl) {
     await addHistory(conn, { orderId: id, from: null, to: 'PENDING', note: 'Order submitted by customer', byCustomer: true });
     await notifyCustomer({
       conn, customerId: customer.id, orderId: id, title: 'Order received',
-      message: `We have received your order ${orderNumber}. Our team will review it and confirm shortly.`,
+      message: `We have received your order ${orderNumber}. Our team will review it and confirm shortly.${savedCard
+        ? ` Your ${savedCard.brand} card ending ${savedCard.last4} is verified and will be charged when we confirm the final total.`
+        : ' You will pay in cash on delivery or collection.'}`,
     });
     return id;
   });
@@ -182,7 +254,10 @@ async function createOrder(req, payload, referenceImageUrl) {
   const [order] = await query('SELECT id, order_number, status, total_amount FROM orders WHERE id = ?', [orderId]);
   await logAudit(req, 'ORDER_PLACED', {
     entityType: 'order', entityId: orderId,
-    details: { orderNumber: order.order_number, items: items.length, customCake: !!cake, subtotal: order.total_amount },
+    details: {
+      orderNumber: order.order_number, items: items.length, customCake: !!cake, paymentOption, subtotal: order.total_amount,
+      card: savedCard ? `${savedCard.brand} ending ${savedCard.last4} (verified)` : null,
+    },
   });
   return order;
 }
@@ -217,12 +292,27 @@ async function confirmOrder(req, orderId, { cakeQuote, deliveryFee, note }) {
       conn, customerId: order.customer_id, orderId: order.id, title: 'Order confirmed',
       message: statusMessage(updated, 'CONFIRMED', note),
     });
-    return { order, quote, fee, total };
+
+    // Pay-online orders: charge the card verified at checkout, now that the total is final.
+    let charge = null;
+    if (order.payment_option === 'ONLINE' && order.payment_method_id && total - paid > 0.001) {
+      const [pm] = await conn.q('SELECT * FROM payment_methods WHERE id = ?', [order.payment_method_id]);
+      if (pm) {
+        const amount = money(total - paid);
+        const result = gateway.chargeSaved({ amount, profile: pm.sandbox_outcome });
+        charge = await recordCharge(conn, updated, {
+          amount, paid, result, key: `confirm-${order.id}`,
+          card: { brand: pm.card_brand, last4: pm.card_last4, holder: pm.card_holder },
+        });
+      }
+    }
+    return { order, quote, fee, total, charge };
   });
   await logAudit(req, 'ORDER_CONFIRMED', {
     entityType: 'order', entityId: orderId,
     details: { orderNumber: result.order.order_number, cakeQuote: result.quote, deliveryFee: result.fee, total: result.total },
   });
+  if (result.charge) await auditCharge(req, result.order, result.charge, 'saved card charged on confirmation');
 }
 
 // ---------------------------------------------------------------------------
@@ -239,6 +329,14 @@ async function changeStatusTx(conn, req, orderId, status, note) {
   if ((status === 'REJECTED' || status === 'CANCELLED') && !note) {
     throw ApiError.unprocessable('Reason required', { note: 'Please provide a reason' });
   }
+  if (status === 'IN_PREPARATION' && order.payment_option === 'ONLINE') {
+    const paid = await paidAmount(conn, order.id);
+    if (paid + 0.001 < Number(order.total_amount)) {
+      throw ApiError.badRequest(
+        `This order is paid online in advance: wait for the customer's payment of ${formatLKR(Number(order.total_amount) - paid)} before starting preparation.`
+      );
+    }
+  }
   if (status === 'COMPLETED') {
     const paid = await paidAmount(conn, order.id);
     if (order.payment_status !== 'PAID' || paid + 0.001 < Number(order.total_amount)) {
@@ -247,6 +345,8 @@ async function changeStatusTx(conn, req, orderId, status, note) {
   }
 
   if (status === 'CANCELLED') await restoreStock(conn, order, req.staff?.id || null);
+  // Money already paid on a cancelled or rejected order goes back to the customer.
+  if (status === 'CANCELLED' || status === 'REJECTED') order.refunded = await refundAll(conn, req, order, note);
 
   const sets = ['status = ?'];
   const params = [status];
@@ -285,6 +385,11 @@ async function changeStatus(req, orderId, { status, note }) {
     entityType: 'order', entityId: orderId,
     details: { orderNumber: order.order_number, from: order.status, to: status, note: note || null },
   });
+  if (order.refunded) {
+    await logAudit(req, 'PAYMENT_REFUNDED', {
+      entityType: 'order', entityId: orderId, details: { orderNumber: order.order_number, amount: order.refunded, reason: note || null },
+    });
+  }
 }
 
 /** Customer cancels their own order while it is still pending (US18). */
@@ -411,6 +516,14 @@ async function recordPayment(req, orderId, { amount, method, referenceNo, paidAt
     if (o.status === 'PENDING') throw ApiError.badRequest('Confirm the order before recording payments so the total is final');
     if (['CANCELLED', 'REJECTED'].includes(o.status)) throw ApiError.badRequest(`Cannot record a payment for a ${STATUS_LABELS[o.status].toLowerCase()} order`);
     if (o.payment_status === 'REFUNDED') throw ApiError.badRequest('This order has been refunded');
+    if (!STAFF_PAYMENT_METHODS[o.payment_option].includes(method)) {
+      const [cake] = await conn.q('SELECT id FROM cake_requirements WHERE order_id = ?', [o.id]);
+      throw ApiError.unprocessable('Payment method not allowed for this order', {
+        method: method === 'CASH' && cake
+          ? 'Custom cakes are pre-orders paid online: cash is not accepted.'
+          : 'This order is paid online. The customer pays by card on their order page; record only a bank or online transfer here.',
+      });
+    }
     const paid = await paidAmount(conn, o.id);
     const balance = money(Number(o.total_amount) - paid);
     if (balance <= 0) throw ApiError.badRequest('This order is already fully paid');
@@ -451,6 +564,13 @@ async function updatePaymentStatus(req, orderId, { paymentStatus, note }) {
       throw ApiError.badRequest('Partially paid requires some, but not all, of the total to be paid');
     }
     if (paymentStatus === 'REFUNDED' && paid <= 0) throw ApiError.badRequest('Nothing has been paid for this order, so it cannot be refunded');
+    if (paymentStatus === 'REFUNDED') {
+      if (!['CANCELLED', 'REJECTED'].includes(o.status)) {
+        throw ApiError.badRequest('Only cancelled or rejected orders can be refunded. Cancel the order first: the payment is refunded automatically.');
+      }
+      o.refunded = await refundAll(conn, req, o, note);
+      return o;
+    }
     await conn.q('UPDATE orders SET payment_status = ? WHERE id = ?', [paymentStatus, o.id]);
     await notifyCustomer({
       conn, customerId: o.customer_id, orderId: o.id, title: 'Payment status updated',
@@ -458,10 +578,192 @@ async function updatePaymentStatus(req, orderId, { paymentStatus, note }) {
     });
     return o;
   });
+  if (order.refunded) {
+    await logAudit(req, 'PAYMENT_REFUNDED', {
+      entityType: 'order', entityId: orderId, details: { orderNumber: order.order_number, amount: order.refunded, reason: note || null },
+    });
+    return;
+  }
   await logAudit(req, 'PAYMENT_STATUS_CHANGED', {
     entityType: 'order', entityId: orderId,
     details: { orderNumber: order.order_number, from: order.payment_status, to: paymentStatus, note: note || null },
   });
+}
+
+/**
+ * Refunds everything paid on an order, inside the caller's transaction: card payments go back to
+ * the same card through the gateway; cash and transfers are recorded as returned by staff.
+ */
+async function refundAll(conn, req, order, reason) {
+  let remaining = await paidAmount(conn, order.id);
+  if (remaining <= 0) return 0;
+  const total = remaining;
+  const payments = await conn.q(
+    `SELECT p.*, t.gateway_ref, t.card_brand, t.card_last4, t.card_holder
+       FROM payments p LEFT JOIN payment_transactions t ON t.id = p.transaction_id
+      WHERE p.order_id = ? AND p.kind = 'PAYMENT' ORDER BY p.paid_at DESC, p.id DESC`,
+    [order.id]
+  );
+  const staffId = req.staff?.id || null;
+  const lines = [];
+  for (const p of payments) {
+    if (remaining <= 0) break;
+    let already = 0;
+    if (p.transaction_id) {
+      const [r] = await conn.q(
+        "SELECT COALESCE(SUM(amount),0) AS n FROM payment_transactions WHERE original_txn_id = ? AND type = 'REFUND' AND status = 'SUCCEEDED'",
+        [p.transaction_id]
+      );
+      already = Number(r.n);
+    }
+    const amount = money(Math.min(Number(p.amount) - already, remaining));
+    if (amount <= 0) continue;
+    let txnId = null;
+    let reference = p.reference_no;
+    let note;
+    if (p.transaction_id) {
+      const result = gateway.refund({ amount, originalRef: p.gateway_ref });
+      if (!result.approved) throw ApiError.badRequest(`The card refund could not be processed: ${result.message}`);
+      const r = await conn.q(
+        `INSERT INTO payment_transactions (order_id, customer_id, type, amount, status, gateway_ref, card_brand, card_last4, card_holder, original_txn_id)
+         VALUES (?,?, 'REFUND', ?, 'SUCCEEDED', ?,?,?,?,?)`,
+        [order.id, order.customer_id, amount, result.gatewayRef, p.card_brand, p.card_last4, p.card_holder, p.transaction_id]
+      );
+      txnId = r.insertId;
+      reference = result.gatewayRef;
+      note = `Refunded to ${p.card_brand} card ending ${p.card_last4}`;
+    } else {
+      note = p.method === 'CASH' ? 'Cash returned to the customer' : `Returned by ${p.method === 'CARD' ? 'card reversal' : 'bank transfer'}`;
+    }
+    await conn.q(
+      `INSERT INTO payments (order_id, kind, amount, method, reference_no, transaction_id, paid_at, notes, recorded_by)
+       VALUES (?, 'REFUND', ?,?,?,?, NOW(), ?, ?)`,
+      [order.id, amount, p.method, reference, txnId, reason ? `${note} - ${reason}`.slice(0, 255) : note, staffId]
+    );
+    lines.push(note.toLowerCase());
+    remaining = money(remaining - amount);
+  }
+  await conn.q("UPDATE orders SET payment_status = 'REFUNDED' WHERE id = ?", [order.id]);
+  await notifyCustomer({
+    conn, customerId: order.customer_id, orderId: order.id, title: 'Refund issued',
+    message: `We have refunded ${formatLKR(total)} for order ${order.order_number} (${[...new Set(lines)].join('; ')}).`,
+  });
+  return total;
+}
+
+/** Public view of a gateway transaction (a receipt). */
+const receipt = (t) => ({
+  id: t.id, status: t.status, amount: Number(t.amount), currency: t.currency, gatewayRef: t.gateway_ref,
+  cardBrand: t.card_brand, cardLast4: t.card_last4, failureCode: t.failure_code, message: t.failure_message, createdAt: t.created_at,
+});
+
+/**
+ * Records a card charge from the gateway inside the caller's transaction: the transaction log row
+ * always, and when approved the payment itself, the new payment status and a receipt notification.
+ * A declined charge on a confirmed order tells the customer to pay with another card.
+ */
+async function recordCharge(conn, order, { amount, paid, result, card, key }) {
+  const r = await conn.q(
+    `INSERT INTO payment_transactions (order_id, customer_id, type, amount, status, gateway_ref, card_brand, card_last4, card_holder,
+                                       failure_code, failure_message, idempotency_key)
+     VALUES (?,?, 'CHARGE', ?,?,?,?,?,?,?,?,?)`,
+    [order.id, order.customer_id, amount, result.approved ? 'SUCCEEDED' : 'FAILED', result.gatewayRef, card.brand, card.last4, card.holder,
+      result.failureCode || null, result.message || null, key]
+  );
+  const [txn] = await conn.q('SELECT * FROM payment_transactions WHERE id = ?', [r.insertId]);
+  if (!result.approved) {
+    if (key && key.startsWith('confirm-')) {
+      await notifyCustomer({
+        conn, customerId: order.customer_id, orderId: order.id, title: 'Payment failed',
+        message: `We could not charge your ${card.brand} card ending ${card.last4} for order ${order.order_number}: ${result.message} `
+          + `Please pay ${formatLKR(amount)} from your order page with another card to secure your order.`,
+      });
+    }
+    return txn;
+  }
+  await conn.q(
+    `INSERT INTO payments (order_id, kind, amount, method, reference_no, transaction_id, paid_at, notes, recorded_by)
+     VALUES (?, 'PAYMENT', ?, 'CARD', ?, ?, NOW(), ?, NULL)`,
+    [order.id, amount, result.gatewayRef, txn.id, `Paid online by ${card.brand} card ending ${card.last4}`]
+  );
+  const status = derivePaymentStatus(money(paid + amount), Number(order.total_amount));
+  await conn.q('UPDATE orders SET payment_status = ? WHERE id = ?', [status, order.id]);
+  await notifyCustomer({
+    conn, customerId: order.customer_id, orderId: order.id, title: 'Payment received',
+    message: `Thank you! We received ${formatLKR(amount)} for order ${order.order_number} by ${card.brand} card ending ${card.last4} `
+      + `(ref ${result.gatewayRef}).${status === 'PAID' ? ' Your order is fully paid.' : ''}`,
+  });
+  return txn;
+}
+
+async function auditCharge(req, order, txn, how) {
+  await logAudit(req, txn.status === 'SUCCEEDED' ? 'PAYMENT_ONLINE_SUCCEEDED' : 'PAYMENT_ONLINE_FAILED', {
+    actor: req.customer ? { type: 'CUSTOMER', id: req.customer.id, name: req.customer.full_name } : undefined,
+    entityType: 'order', entityId: order.id,
+    details: {
+      orderNumber: order.order_number, amount: Number(txn.amount), gatewayRef: txn.gateway_ref, how,
+      card: `${txn.card_brand} ending ${txn.card_last4}`, failureCode: txn.failure_code || null,
+    },
+  });
+}
+
+function declined(t) {
+  const err = new ApiError(402, t.failure_message || 'The payment was declined');
+  err.code = t.failure_code || 'card_declined';
+  return err;
+}
+
+/**
+ * Customer pays the balance of a confirmed order by card through the gateway.
+ * Idempotent: retrying with the same key returns the first result instead of charging again.
+ */
+async function payOnline(req, orderId, body) {
+  const key = body.idempotencyKey;
+  const replay = async () => {
+    const [t] = await query('SELECT * FROM payment_transactions WHERE idempotency_key = ?', [key]);
+    if (!t) return null;
+    if (t.order_id !== Number(orderId) || t.customer_id !== req.customer.id) throw ApiError.conflict('This payment request was already used');
+    if (t.status === 'FAILED') throw declined(t);
+    return receipt(t);
+  };
+  const earlier = await replay();
+  if (earlier) return earlier;
+
+  const { card, errors } = gateway.validateCard(body);
+  if (errors) throw ApiError.unprocessable('Please check your card details', errors);
+
+  let result;
+  try {
+    result = await withTransaction(async (conn) => {
+      const o = await lockOrder(conn, orderId);
+      if (o.customer_id !== req.customer.id) throw ApiError.notFound('Order not found');
+      if (o.status === 'PENDING') throw ApiError.badRequest('You can pay once we have confirmed your order and its final total.');
+      if (!PAYABLE_STATUSES.includes(o.status)) throw ApiError.badRequest(`This order is ${STATUS_LABELS[o.status].toLowerCase()} and cannot be paid.`);
+      if (o.payment_status === 'REFUNDED') throw ApiError.badRequest('This order has been refunded.');
+      const paid = await paidAmount(conn, o.id);
+      const balance = money(Number(o.total_amount) - paid);
+      if (balance <= 0) throw ApiError.badRequest('This order is already fully paid.');
+      if (body.amount !== undefined && Math.abs(Number(body.amount) - balance) > 0.001) {
+        throw ApiError.conflict(`The amount due has changed to ${formatLKR(balance)}. Please review it and pay again.`);
+      }
+
+      const result = gateway.charge({ amount: balance, card });
+      const txn = await recordCharge(conn, o, { amount: balance, paid, result, card, key });
+      return { order: o, txn };
+    });
+  } catch (err) {
+    // A simultaneous retry with the same key got there first: return its result.
+    if (err.code === 'ER_DUP_ENTRY' && /idempotency_key/.test(err.message)) {
+      const r = await replay();
+      if (r) return r;
+    }
+    throw err;
+  }
+
+  const { order, txn } = result;
+  await auditCharge(req, order, txn, 'paid by the customer on the order page');
+  if (txn.status === 'FAILED') throw declined(txn);
+  return receipt(txn);
 }
 
 // ---------------------------------------------------------------------------
@@ -593,11 +895,21 @@ async function getOrderDetail(orderId, { forCustomer = false } = {}) {
     [orderId]
   );
   const payments = await query(
-    `SELECT p.*, s.full_name AS recorded_by_name FROM payments p LEFT JOIN staff s ON s.id = p.recorded_by
+    `SELECT p.*, s.full_name AS recorded_by_name, t.card_brand, t.card_last4
+       FROM payments p LEFT JOIN staff s ON s.id = p.recorded_by LEFT JOIN payment_transactions t ON t.id = p.transaction_id
       WHERE p.order_id = ? ORDER BY p.paid_at, p.id`,
     [orderId]
   );
-  const paid = money(payments.reduce((s, p) => s + Number(p.amount), 0));
+  const [cardOnFile] = order.payment_method_id
+    ? await query('SELECT card_brand, card_last4, exp_month, exp_year FROM payment_methods WHERE id = ?', [order.payment_method_id])
+    : [];
+  const [lastCharge] = await query(
+    "SELECT status, failure_message, card_brand, card_last4 FROM payment_transactions WHERE order_id = ? AND type = 'CHARGE' ORDER BY id DESC LIMIT 1",
+    [orderId]
+  );
+  const refunded = money(payments.filter((p) => p.kind === 'REFUND').reduce((s, p) => s + Number(p.amount), 0));
+  const paid = money(payments.reduce((s, p) => s + (p.kind === 'REFUND' ? -1 : 1) * Number(p.amount), 0));
+  const balance = money(Math.max(0, Number(order.total_amount) - paid));
   const detail = {
     ...order,
     stock_deducted: !!order.stock_deducted,
@@ -607,7 +919,14 @@ async function getOrderDetail(orderId, { forCustomer = false } = {}) {
     history: history.map((h) => ({ ...h, changed_by_customer: !!h.changed_by_customer })),
     payments,
     amount_paid: paid,
-    balance_due: money(Math.max(0, Number(order.total_amount) - paid)),
+    amount_refunded: refunded,
+    balance_due: balance,
+    is_custom_cake: !!cakeRequirement,
+    can_pay_online: PAYABLE_STATUSES.includes(order.status) && balance > 0 && order.payment_status !== 'REFUNDED',
+    awaiting_prepayment: order.payment_option === 'ONLINE' && order.status === 'CONFIRMED' && balance > 0,
+    card_on_file: cardOnFile || null,
+    last_payment_error: balance > 0 && lastCharge?.status === 'FAILED'
+      ? `${lastCharge.card_brand} card ending ${lastCharge.card_last4}: ${lastCharge.failure_message}` : null,
     allowed_next_statuses: allowedNextStatuses(order),
   };
   if (forCustomer) {
@@ -628,6 +947,6 @@ async function getOrderDetail(orderId, { forCustomer = false } = {}) {
 
 module.exports = {
   createOrder, confirmOrder, changeStatus, customerCancel, updateOrderDetails,
-  recordPayment, updatePaymentStatus, updateDelivery, updateDeliveryStatus,
+  recordPayment, updatePaymentStatus, payOnline, refundAll, updateDelivery, updateDeliveryStatus,
   getOrderDetail, allowedNextStatuses, derivePaymentStatus, toDateString,
 };

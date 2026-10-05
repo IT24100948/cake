@@ -4,7 +4,7 @@
 -- =====================================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
-DROP TABLE IF EXISTS audit_logs, notifications, deliveries, payments, order_status_history,
+DROP TABLE IF EXISTS audit_logs, notifications, deliveries, payments, payment_transactions, payment_methods, order_status_history,
   cake_requirements, order_items, orders, inventory_transactions, products, categories,
   customers, staff, role_permissions, permissions, roles;
 SET FOREIGN_KEY_CHECKS = 1;
@@ -75,6 +75,23 @@ CREATE TABLE customers (
 -- ---------------------------------------------------------------------
 -- EP02 - Cake, Party Decoration Product & Inventory Management
 -- ---------------------------------------------------------------------
+-- Cards verified at checkout for "pay online" orders. The gateway keeps the card itself and gives the
+-- shop a token; only the brand, last four digits and expiry are kept here (never the number or CVC).
+CREATE TABLE payment_methods (
+  id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  customer_id      INT UNSIGNED  NOT NULL,
+  gateway_token    VARCHAR(40)   NOT NULL UNIQUE,
+  card_brand       VARCHAR(20)   NOT NULL,
+  card_last4       CHAR(4)       NOT NULL,
+  card_holder      VARCHAR(100)  NOT NULL,
+  exp_month        TINYINT UNSIGNED  NOT NULL,
+  exp_year         SMALLINT UNSIGNED NOT NULL,
+  -- Sandbox only: how the simulated bank answers charges on this token (a real gateway decides this itself).
+  sandbox_outcome  VARCHAR(40)   NOT NULL DEFAULT 'approved',
+  created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_pm_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 CREATE TABLE categories (
   id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name          VARCHAR(80)  NOT NULL,
@@ -119,6 +136,11 @@ CREATE TABLE orders (
                           'READY_FOR_COLLECTION','COMPLETED','CANCELLED','REJECTED')
                      NOT NULL DEFAULT 'PENDING',
   payment_status     ENUM('UNPAID','PARTIALLY_PAID','PAID','REFUNDED') NOT NULL DEFAULT 'UNPAID',
+  -- ONLINE: paid by card through the payment gateway before preparation (required for custom cakes).
+  -- CASH_ON_DELIVERY: paid in cash when delivered or collected (orders without a custom cake only).
+  payment_option     ENUM('ONLINE','CASH_ON_DELIVERY') NOT NULL DEFAULT 'ONLINE',
+  -- The card verified at checkout for ONLINE orders; it is charged when the order is confirmed.
+  payment_method_id  INT UNSIGNED  NULL,
   fulfillment_type   ENUM('DELIVERY','COLLECTION') NOT NULL,
   event_date         DATE          NOT NULL,
   subtotal           DECIMAL(10,2) NOT NULL DEFAULT 0,
@@ -136,6 +158,7 @@ CREATE TABLE orders (
   updated_at         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_order_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
   CONSTRAINT fk_order_confirmed_by FOREIGN KEY (confirmed_by) REFERENCES staff(id) ON DELETE SET NULL,
+  CONSTRAINT fk_order_payment_method FOREIGN KEY (payment_method_id) REFERENCES payment_methods(id) ON DELETE SET NULL,
   KEY idx_order_status (status),
   KEY idx_order_created (created_at)
 ) ENGINE=InnoDB;
@@ -206,19 +229,50 @@ CREATE TABLE inventory_transactions (
 -- ---------------------------------------------------------------------
 -- EP04 - Payments & Delivery / Collection
 -- ---------------------------------------------------------------------
+-- Card transactions handled by the built-in (sandbox) payment gateway. Only the brand and
+-- last four digits of a card are kept: never the full number or the CVC.
+CREATE TABLE payment_transactions (
+  id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  order_id         INT UNSIGNED  NOT NULL,
+  customer_id      INT UNSIGNED  NULL,
+  type             ENUM('CHARGE','REFUND') NOT NULL,
+  amount           DECIMAL(10,2) NOT NULL,
+  currency         CHAR(3)       NOT NULL DEFAULT 'LKR',
+  status           ENUM('SUCCEEDED','FAILED') NOT NULL,
+  gateway_ref      VARCHAR(40)   NOT NULL UNIQUE,
+  card_brand       VARCHAR(20)   NULL,
+  card_last4       CHAR(4)       NULL,
+  card_holder      VARCHAR(100)  NULL,
+  failure_code     VARCHAR(40)   NULL,
+  failure_message  VARCHAR(255)  NULL,
+  idempotency_key  VARCHAR(64)   NULL UNIQUE,
+  original_txn_id  INT UNSIGNED  NULL,
+  created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT chk_txn_amount CHECK (amount > 0),
+  CONSTRAINT fk_txn_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+  CONSTRAINT fk_txn_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
+  CONSTRAINT fk_txn_original FOREIGN KEY (original_txn_id) REFERENCES payment_transactions(id),
+  KEY idx_txn_order (order_id)
+) ENGINE=InnoDB;
+
+-- Money in (PAYMENT) and money returned (REFUND). Amounts are always positive;
+-- the amount paid on an order is SUM(payments) - SUM(refunds).
 CREATE TABLE payments (
-  id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  order_id      INT UNSIGNED  NOT NULL,
-  amount        DECIMAL(10,2) NOT NULL,
-  method        ENUM('CASH','BANK_TRANSFER','CARD','ONLINE_TRANSFER') NOT NULL,
-  reference_no  VARCHAR(80)   NULL,
-  paid_at       DATETIME      NOT NULL,
-  notes         VARCHAR(255)  NULL,
-  recorded_by   INT UNSIGNED  NULL,
-  created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  order_id       INT UNSIGNED  NOT NULL,
+  kind           ENUM('PAYMENT','REFUND') NOT NULL DEFAULT 'PAYMENT',
+  amount         DECIMAL(10,2) NOT NULL,
+  method         ENUM('CASH','BANK_TRANSFER','CARD','ONLINE_TRANSFER') NOT NULL,
+  reference_no   VARCHAR(80)   NULL,
+  transaction_id INT UNSIGNED  NULL,
+  paid_at        DATETIME      NOT NULL,
+  notes          VARCHAR(255)  NULL,
+  recorded_by    INT UNSIGNED  NULL,
+  created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT chk_payment_amount CHECK (amount > 0),
   CONSTRAINT fk_payment_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   CONSTRAINT fk_payment_staff FOREIGN KEY (recorded_by) REFERENCES staff(id) ON DELETE SET NULL,
+  CONSTRAINT fk_payment_txn FOREIGN KEY (transaction_id) REFERENCES payment_transactions(id),
   KEY idx_payment_date (paid_at)
 ) ENGINE=InnoDB;
 

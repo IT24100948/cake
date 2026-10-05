@@ -27,12 +27,13 @@ async function updateStatus(req, res) {
 
 /** All payments (Payments page). */
 async function list(req, res) {
-  const { from, to, method, search } = req.query;
+  const { from, to, method, search, kind } = req.query;
   const where = [];
   const params = [];
   if (from) { where.push('p.paid_at >= ?'); params.push(`${from} 00:00:00`); }
   if (to) { where.push('p.paid_at <= ?'); params.push(`${to} 23:59:59`); }
   if (method) { where.push('p.method = ?'); params.push(method); }
+  if (kind === 'PAYMENT' || kind === 'REFUND') { where.push('p.kind = ?'); params.push(kind); }
   if (search) {
     where.push('(o.order_number LIKE ? OR c.full_name LIKE ? OR p.reference_no LIKE ?)');
     params.push(...Array(3).fill(`%${search}%`));
@@ -40,10 +41,14 @@ async function list(req, res) {
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const pg = paginate(req.query, 25);
   const base = `FROM payments p JOIN orders o ON o.id = p.order_id JOIN customers c ON c.id = o.customer_id
-                LEFT JOIN staff s ON s.id = p.recorded_by ${whereSql}`;
-  const [{ total, amount }] = await query(`SELECT COUNT(*) AS total, COALESCE(SUM(p.amount),0) AS amount ${base}`, params);
+                LEFT JOIN staff s ON s.id = p.recorded_by LEFT JOIN payment_transactions t ON t.id = p.transaction_id ${whereSql}`;
+  // Net total: refunds count against the payments received.
+  const [{ total, amount }] = await query(
+    `SELECT COUNT(*) AS total, COALESCE(SUM(IF(p.kind = 'REFUND', -p.amount, p.amount)),0) AS amount ${base}`, params
+  );
   const data = await query(
-    `SELECT p.*, o.order_number, o.payment_status, o.total_amount, c.full_name AS customer_name, s.full_name AS recorded_by_name
+    `SELECT p.*, o.order_number, o.payment_status, o.payment_option, o.total_amount, c.full_name AS customer_name,
+            s.full_name AS recorded_by_name, t.card_brand, t.card_last4
      ${base} ORDER BY p.paid_at DESC, p.id DESC LIMIT ? OFFSET ?`,
     [...params, pg.limit, pg.offset]
   );

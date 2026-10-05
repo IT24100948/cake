@@ -165,6 +165,10 @@ async function seedOrders({ staffIds, customerIds, productIds }) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
   const place = (customer, payload) => svc.createOrder(fakeReq({ customer }), payload, null);
+  /** Card details typed at checkout for "pay online" orders (gateway test cards). */
+  const testCard = (customer, number = '4242424242424242') => ({
+    cardholderName: customer.full_name, cardNumber: number, expMonth: 12, expYear: new Date().getFullYear() + 3, cvc: '123',
+  });
   /** Shifts an order and everything recorded against it `daysAgo` days into the past. */
   const backdate = async (orderId, daysAgo) => {
     const shift = (table, cols) => query(
@@ -178,6 +182,7 @@ async function seedOrders({ staffIds, customerIds, productIds }) {
     );
     await shift('order_status_history', ['created_at']);
     await shift('payments', ['paid_at', 'created_at']);
+    await shift('payment_transactions', ['created_at']);
     await shift('notifications', ['created_at']);
     await shift('inventory_transactions', ['created_at']);
     await shift('deliveries', ['completed_at']);
@@ -189,11 +194,11 @@ async function seedOrders({ staffIds, customerIds, productIds }) {
   };
   const [tharushi, ravindu, amaya] = customerIds;
 
-  // 1. Completed birthday order (delivered, fully paid)
+  // 1. Completed birthday order (cash on delivery, with a bank-transfer advance)
   let o = await place(tharushi, {
     items: [{ productId: productIds['CK-CHOC-1KG'], quantity: 1, notes: 'Happy 7th Birthday Senuli' },
       { productId: productIds['DC-BAL-PST25'], quantity: 2 }, { productId: productIds['DC-TBL-CNDL'], quantity: 1, notes: 'Number 7' }],
-    fulfillmentType: 'DELIVERY', eventDate: day(-12),
+    fulfillmentType: 'DELIVERY', paymentOption: 'CASH_ON_DELIVERY', eventDate: day(-12),
     delivery: { address: '12 Flower Road', city: 'Colombo 07', preferredTimeSlot: '9am - 12pm' },
   });
   await svc.confirmOrder(clerk, o.id, { deliveryFee: 500, note: 'Confirmed by phone' });
@@ -206,7 +211,7 @@ async function seedOrders({ staffIds, customerIds, productIds }) {
   await svc.changeStatus(clerk, o.id, { status: 'COMPLETED' });
   await backdate(o.id, 14);
 
-  // 2. Custom wedding cake - confirmed, in preparation, partially paid, collection
+  // 2. Custom wedding cake (pre-order) - card verified at checkout, charged on confirmation, then in preparation
   o = await place(ravindu, {
     items: [{ productId: productIds['DC-BAN-SEQ'], quantity: 1 }],
     cakeRequirement: {
@@ -214,10 +219,9 @@ async function seedOrders({ staffIds, customerIds, productIds }) {
       icingType: 'Fondant', colors: 'White and gold', theme: 'Classic floral', messageOnCake: 'Ravindu & Dilini',
       dietaryNotes: 'No nuts', additionalDetails: 'Fresh white roses cascading down one side.',
     },
-    fulfillmentType: 'COLLECTION', eventDate: day(5), notes: 'Please call before finalising the design.',
+    fulfillmentType: 'COLLECTION', paymentOption: 'ONLINE', card: testCard(ravindu), eventDate: day(5), notes: 'Please call before finalising the design.',
   });
   await svc.confirmOrder(admin, o.id, { cakeQuote: 32000, note: 'Design agreed with customer' });
-  await svc.recordPayment(admin, o.id, { amount: 15000, method: 'ONLINE_TRANSFER', referenceNo: 'HNB-99812', notes: 'Advance' });
   await svc.changeStatus(clerk, o.id, { status: 'IN_PREPARATION' });
   await svc.updateDelivery(clerk, o.id, { type: 'COLLECTION', recipientName: 'Ravindu Jayasinghe', contactPhone: '0701122334', scheduledDate: day(5), scheduledTimeSlot: '8am - 10am' });
   await backdate(o.id, 6);
@@ -226,31 +230,38 @@ async function seedOrders({ staffIds, customerIds, productIds }) {
   o = await place(amaya, {
     items: [{ productId: productIds['DC-BAL-NUM'], quantity: 2, notes: 'Numbers 2 and 1' }, { productId: productIds['DC-BAN-HBD'], quantity: 1 }],
     cakeRequirement: { occasion: 'Birthday', flavor: 'Red velvet', weightKg: 2, shape: 'Heart', tiers: 1, icingType: 'Cream cheese', colors: 'Pink and white', theme: 'Minimal', messageOnCake: 'Happy 21st Amaya' },
-    fulfillmentType: 'DELIVERY', eventDate: day(3),
+    fulfillmentType: 'DELIVERY', paymentOption: 'ONLINE', card: testCard(amaya, '5555555555554444'), eventDate: day(4),
     delivery: { address: '8 Lake Drive', city: 'Nugegoda', preferredTimeSlot: '3pm - 6pm' },
   });
   await backdate(o.id, 1);
 
+  // 3b. Pay-online decorations: the card was accepted at checkout but declined when charged, so it awaits payment
+  o = await place(amaya, {
+    items: [{ productId: productIds['DC-BAL-ARCH'], quantity: 1 }, { productId: productIds['DC-BAL-PST25'], quantity: 1 }],
+    fulfillmentType: 'COLLECTION', paymentOption: 'ONLINE', card: testCard(amaya, '4000000000009995'), eventDate: day(6),
+  });
+  await svc.confirmOrder(clerk, o.id, {});
+
   // 4. Pending simple order from the demo customer
   o = await place(tharushi, {
     items: [{ productId: productIds['CK-CUP-12'], quantity: 1 }, { productId: productIds['DC-TBL-SET'], quantity: 1 }],
-    fulfillmentType: 'COLLECTION', eventDate: day(2),
+    fulfillmentType: 'COLLECTION', paymentOption: 'CASH_ON_DELIVERY', eventDate: day(2),
   });
 
-  // 5. Ready for collection, fully paid
+  // 5. Ready for collection, cash on collection - paid early by card at the shop counter
   o = await place(amaya, {
     items: [{ productId: productIds['CK-RIBBON'], quantity: 2 }],
-    fulfillmentType: 'COLLECTION', eventDate: day(1),
+    fulfillmentType: 'COLLECTION', paymentOption: 'CASH_ON_DELIVERY', eventDate: day(1),
   });
   await svc.confirmOrder(clerk, o.id, {});
   await svc.recordPayment(clerk, o.id, { amount: 7000, method: 'CARD', referenceNo: 'POS-2231' });
   for (const s of ['IN_PREPARATION', 'READY', 'READY_FOR_COLLECTION']) await svc.changeStatus(clerk, o.id, { status: s });
   await backdate(o.id, 3);
 
-  // 6. Cancelled order (stock restored)
+  // 6. Card charged on confirmation, then cancelled: stock restored and the payment refunded to the card
   o = await place(ravindu, {
     items: [{ productId: productIds['DC-BAL-ARCH'], quantity: 1 }],
-    fulfillmentType: 'DELIVERY', eventDate: day(8), delivery: { address: '45 Temple Lane', city: 'Kandy' },
+    fulfillmentType: 'DELIVERY', paymentOption: 'ONLINE', card: testCard(ravindu), eventDate: day(8), delivery: { address: '45 Temple Lane', city: 'Kandy' },
   });
   await svc.confirmOrder(clerk, o.id, { deliveryFee: 1200 });
   await svc.changeStatus(clerk, o.id, { status: 'CANCELLED', note: 'Customer postponed the event' });
@@ -259,7 +270,7 @@ async function seedOrders({ staffIds, customerIds, productIds }) {
   // 7-10. A few completed orders across the last month for the dashboard charts
   const history = [[tharushi, 'CK-VAN-RNB', 1, 25], [ravindu, 'CK-CUP-12', 2, 20], [amaya, 'CK-CHOC-1KG', 1, 8], [tharushi, 'CK-RIBBON', 1, 4]];
   for (const [cust, sku, qty, ago] of history) {
-    o = await place(cust, { items: [{ productId: productIds[sku], quantity: qty }, { productId: productIds['DC-TBL-CNDL'], quantity: 2 }], fulfillmentType: 'COLLECTION', eventDate: day(-ago + 1) });
+    o = await place(cust, { items: [{ productId: productIds[sku], quantity: qty }, { productId: productIds['DC-TBL-CNDL'], quantity: 2 }], fulfillmentType: 'COLLECTION', paymentOption: 'CASH_ON_DELIVERY', eventDate: day(-ago + 1) });
     await svc.confirmOrder(clerk, o.id, {});
     const [row] = await query('SELECT total_amount FROM orders WHERE id = ?', [o.id]);
     await svc.recordPayment(clerk, o.id, { amount: row.total_amount, method: 'CASH' });

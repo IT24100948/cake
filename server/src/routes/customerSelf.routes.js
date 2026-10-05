@@ -36,6 +36,17 @@ router.put(
 router.post('/orders', c, imageUpload('referenceImage'), parseMultipartPayload, validate(orderCreateRules), orders.create);
 router.get('/my/orders', c, orders.myOrders);
 router.get('/my/orders/:id', c, validate([idParam()]), orders.myOrder);
+// Online payment through the built-in gateway (card fields are validated by the gateway itself)
+router.get('/my/payments/test-cards', c, orders.testCards);
+router.post(
+  '/my/orders/:id/pay', c,
+  validate([
+    idParam(),
+    body('idempotencyKey').isString().matches(/^[A-Za-z0-9_-]{8,64}$/).withMessage('A unique payment request key is required'),
+    body('amount').optional().isFloat({ min: 0.01 }).withMessage('Invalid amount').toFloat(),
+  ]),
+  orders.payMyOrder
+);
 router.patch(
   '/my/orders/:id/cancel', c,
   validate([idParam(), body('reason').optional({ values: 'falsy' }).trim().isLength({ max: 255 })]),

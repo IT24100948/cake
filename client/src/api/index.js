@@ -47,6 +47,8 @@ export const myApi = {
   unreadCount: () => data(api.get('/my/notifications/unread-count')),
   markRead: (id) => data(api.patch(`/my/notifications/${id}/read`)),
   markAllRead: () => data(api.patch('/my/notifications/read-all')),
+  pay: (id, body) => data(api.post(`/my/orders/${id}/pay`, body)),
+  testCards: () => data(api.get('/my/payments/test-cards')),
 };
 
 export const staffApi = {

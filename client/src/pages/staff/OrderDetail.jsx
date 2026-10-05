@@ -4,7 +4,7 @@ import { orderApi, productApi, staffApi } from '../../api';
 import { useStaffAuth } from '../../context/StaffAuthContext';
 import { useToast } from '../../context/ToastContext';
 import { useAsync, useForm } from '../../utils/useAsync';
-import { formatDate, formatDateTime, formatLKR, imageUrl, isoDate, methodLabel, PAYMENT_METHODS, statusLabel, TIME_SLOTS } from '../../utils/format';
+import { formatDate, formatDateTime, formatLKR, imageUrl, isoDate, paymentLabel, PAYMENT_METHODS, STAFF_PAYMENT_METHODS, statusLabel, TIME_SLOTS } from '../../utils/format';
 import { isPhone } from '../../utils/validation';
 import { Alert, ErrorState, Field, Loading, Modal, StatusBadge, SubmitButton } from '../../components/ui';
 import { Can } from '../../components/Guards';
@@ -37,6 +37,12 @@ function ConfirmModal({ order, onClose, onDone }) {
       <form className="stack" onSubmit={onSubmit} noValidate>
         <Alert>{f.formError}</Alert>
         <p className="muted mb-0">Confirming reserves stock for the items and notifies the customer with the final total.</p>
+        {order.payment_option === 'ONLINE' && order.card_on_file && (
+          <Alert type="info">
+            The customer’s {order.card_on_file.card_brand} card ending {order.card_on_file.card_last4} (verified at checkout) is charged
+            the order total automatically when you confirm.
+          </Alert>
+        )}
         <div className="form-grid">
           {order.cakeRequirement && <Field label="Custom cake price (LKR)" type="number" min="1" step="0.01" required {...f.bind('cakeQuote')} />}
           {order.fulfillment_type === 'DELIVERY' && <Field label="Delivery fee (LKR)" type="number" min="0" step="0.01" {...f.bind('deliveryFee')} />}
@@ -75,7 +81,12 @@ function StatusModal({ order, target, onClose, onDone }) {
       <form className="stack" onSubmit={onSubmit} noValidate>
         <Alert>{f.formError}</Alert>
         {target === 'CANCELLED' && order.stock_deducted && <Alert type="info">Reserved stock will be returned to inventory.</Alert>}
-        {target === 'CANCELLED' && order.amount_paid > 0 && <Alert type="warning">{formatLKR(order.amount_paid)} has been paid. Remember to mark the payment as refunded if you return it.</Alert>}
+        {needsReason && order.amount_paid > 0 && (
+          <Alert type="warning">
+            {formatLKR(order.amount_paid)} has been paid and will be refunded automatically:
+            online card payments go back to the customer’s card; cash and transfers are recorded as returned, so hand them back to the customer.
+          </Alert>
+        )}
         {target === 'COMPLETED' && <Alert type="info">The {order.fulfillment_type === 'DELIVERY' ? 'delivery' : 'collection'} will be marked as {order.fulfillment_type === 'DELIVERY' ? 'delivered' : 'collected'}.</Alert>}
         <Field as="textarea" label={needsReason ? 'Reason (shared with the customer)' : 'Note to customer (optional)'} required={needsReason} maxLength={500} {...f.bind('note')} />
         <div className="form-actions">
@@ -194,7 +205,8 @@ function PaymentModal({ order, onClose, onDone }) {
   const toast = useToast();
   const now = new Date();
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  const f = useForm({ amount: order.balance_due, method: 'CASH', referenceNo: '', paidAt: local, notes: '' });
+  const methods = PAYMENT_METHODS.filter((m) => STAFF_PAYMENT_METHODS[order.payment_option].includes(m.value));
+  const f = useForm({ amount: order.balance_due, method: methods[0].value, referenceNo: '', paidAt: local, notes: '' });
   const needsRef = f.values.method !== 'CASH';
   const onSubmit = (e) => {
     e.preventDefault();
@@ -216,9 +228,15 @@ function PaymentModal({ order, onClose, onDone }) {
       <form className="stack" onSubmit={onSubmit} noValidate>
         <Alert>{f.formError}</Alert>
         <div className="row-between"><span className="muted">Balance due</span><strong>{formatLKR(order.balance_due)}</strong></div>
+        {order.payment_option === 'ONLINE' && (
+          <Alert type="info">
+            {order.is_custom_cake ? 'Custom cakes are pre-orders paid online: cash is not accepted. ' : 'This order is paid online. '}
+            The customer pays by card from their order page. Record here only a bank or online transfer you have received.
+          </Alert>
+        )}
         <div className="form-grid">
           <Field label="Amount (LKR)" type="number" min="0.01" step="0.01" required {...f.bind('amount')} />
-          <Field as="select" label="Method" required {...f.bind('method')}>{PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</Field>
+          <Field as="select" label="Method" required {...f.bind('method')}>{methods.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</Field>
           <Field label="Reference no." required={needsRef} placeholder={needsRef ? 'Bank / transaction ref' : 'Optional'} {...f.bind('referenceNo')} />
           <Field label="Paid at" type="datetime-local" max={local} required {...f.bind('paidAt')} />
           <Field className="full" label="Notes" maxLength={255} placeholder="e.g. Advance payment" {...f.bind('notes')} />
@@ -235,7 +253,10 @@ function PaymentModal({ order, onClose, onDone }) {
 // ---------- US21 Payment status ----------
 function PaymentStatusModal({ order, onClose, onDone }) {
   const toast = useToast();
-  const f = useForm({ paymentStatus: order.payment_status === 'REFUNDED' ? 'PAID' : 'REFUNDED', note: '' });
+  // A refund is a real money movement, so it is offered only for cancelled or rejected orders that still hold money.
+  const canRefund = ['CANCELLED', 'REJECTED'].includes(order.status) && order.amount_paid > 0;
+  const options = ['UNPAID', 'PARTIALLY_PAID', 'PAID', ...(canRefund ? ['REFUNDED'] : [])].filter((s) => s !== order.payment_status);
+  const f = useForm({ paymentStatus: canRefund ? 'REFUNDED' : options[0], note: '' });
   const onSubmit = (e) => {
     e.preventDefault();
     f.submit(async (v) => {
@@ -248,9 +269,13 @@ function PaymentStatusModal({ order, onClose, onDone }) {
     <Modal title="Update payment status" onClose={onClose}>
       <form className="stack" onSubmit={onSubmit} noValidate>
         <Alert>{f.formError}</Alert>
-        <p className="muted mb-0">Payment status is updated automatically when payments are recorded. Use this to correct it or mark a refund.</p>
+        <p className="muted mb-0">
+          Payment status follows the payments and refunds recorded. {canRefund
+            ? `Choosing Refunded returns the ${formatLKR(order.amount_paid)} held on this order (card payments go back to the card).`
+            : 'Refunds happen automatically when a paid order is cancelled.'}
+        </p>
         <Field as="select" label="Payment status" {...f.bind('paymentStatus')}>
-          {['UNPAID', 'PARTIALLY_PAID', 'PAID', 'REFUNDED'].filter((s) => s !== order.payment_status).map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+          {options.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
         </Field>
         <Field as="textarea" label="Note (shared with customer)" maxLength={255} {...f.bind('note')} />
         <div className="form-actions">
@@ -347,12 +372,16 @@ export default function OrderDetail() {
   const closed = ['COMPLETED', 'CANCELLED', 'REJECTED'].includes(o.status);
   const editable = ['PENDING', 'CONFIRMED', 'IN_PREPARATION'].includes(o.status);
   const completeBlocked = forward.includes('COMPLETED') && o.payment_status !== 'PAID';
+  // Online (pre-paid) orders are prepared only once the customer has paid.
+  const prepBlocked = forward.includes('IN_PREPARATION') && o.payment_option === 'ONLINE' && o.balance_due > 0;
+  const blocked = (s) => (s === 'COMPLETED' && completeBlocked) || (s === 'IN_PREPARATION' && prepBlocked);
 
   return (
     <>
       <PageHead title={`Order ${o.order_number}`} crumb={<Link to="/staff/orders">Orders</Link>}
         sub={`Placed ${formatDateTime(o.created_at)} · Needed ${formatDate(o.event_date)} · ${o.fulfillment_type === 'DELIVERY' ? 'Delivery' : 'Collection'}`}>
         <StatusBadge status={o.status} /><StatusBadge status={o.payment_status} />
+        <StatusBadge status={o.payment_option} label={o.payment_option === 'ONLINE' ? (o.is_custom_cake ? 'Pre-order · online' : 'Online payment') : undefined} />
       </PageHead>
 
       <div className="card mb-2">
@@ -366,8 +395,8 @@ export default function OrderDetail() {
             )}
             <Can perm="orders.update">
               {forward.map((s) => (
-                <button key={s} className="btn btn-primary" disabled={s === 'COMPLETED' && completeBlocked}
-                  title={s === 'COMPLETED' && completeBlocked ? 'The order must be fully paid first' : ''} onClick={() => setModal({ type: 'status', target: s })}>
+                <button key={s} className="btn btn-primary" disabled={blocked(s)}
+                  title={blocked(s) ? 'The order must be fully paid first' : ''} onClick={() => setModal({ type: 'status', target: s })}>
                   {NEXT_LABEL[s]}
                 </button>
               ))}
@@ -375,6 +404,11 @@ export default function OrderDetail() {
               {backward.map((s) => <button key={s} className="btn btn-ghost danger-text" onClick={() => setModal({ type: 'status', target: s })}>{NEXT_LABEL[s]}</button>)}
             </Can>
             {completeBlocked && <span className="text-sm muted">Record the remaining payment to complete this order.</span>}
+            {prepBlocked && (
+              <span className="text-sm muted">
+                Waiting for the customer’s online payment of {formatLKR(o.balance_due)}{o.is_custom_cake ? ' (custom cake pre-order)' : ''} before preparation can start.
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -433,7 +467,13 @@ export default function OrderDetail() {
                 </div>
               </Can>
             </div>
-            {o.status === 'PENDING' && <p className="text-sm muted">Payments can be recorded once the order is confirmed and the total is final.</p>}
+            <p className="text-sm muted">
+              {o.payment_option === 'ONLINE'
+                ? `Paid online by the customer${o.is_custom_cake ? ' in advance (custom cake pre-order)' : ''}${o.card_on_file ? `: ${o.card_on_file.card_brand} •••• ${o.card_on_file.card_last4} added at checkout, charged on confirmation` : ''}.`
+                : `Cash on ${o.fulfillment_type === 'DELIVERY' ? 'delivery' : 'collection'}: record the cash when it is received.`}
+              {o.status === 'PENDING' && ' Payments start once the order is confirmed and the total is final.'}
+            </p>
+            {o.last_payment_error && <Alert type="warning">Last charge declined: {o.last_payment_error} The customer has been asked to pay with another card.</Alert>}
             {o.payments.length === 0 ? <p className="muted mb-0">No payments recorded.</p> : (
               <div className="table-wrap">
                 <table className="table">
@@ -442,10 +482,13 @@ export default function OrderDetail() {
                     {o.payments.map((p) => (
                       <tr key={p.id}>
                         <td className="text-sm">{formatDateTime(p.paid_at)}</td>
-                        <td>{methodLabel(p.method)}{p.notes && <div className="cell-sub">{p.notes}</div>}</td>
+                        <td>
+                          {p.kind === 'REFUND' && <span className="badge badge-neutral">Refund</span>} {paymentLabel(p)}
+                          {p.notes && <div className="cell-sub">{p.notes}</div>}
+                        </td>
                         <td className="text-sm">{p.reference_no || '—'}</td>
-                        <td className="text-sm">{p.recorded_by_name || '—'}</td>
-                        <td className="num strong">{formatLKR(p.amount)}</td>
+                        <td className="text-sm">{p.recorded_by_name || (p.transaction_id ? 'Customer (online)' : '—')}</td>
+                        <td className={`num strong${p.kind === 'REFUND' ? ' danger-text' : ''}`}>{p.kind === 'REFUND' ? `− ${formatLKR(p.amount)}` : formatLKR(p.amount)}</td>
                       </tr>
                     ))}
                   </tbody>

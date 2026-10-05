@@ -68,7 +68,11 @@ export default function Orders() {
                     <td><div>{o.customer_name}</div><div className="cell-sub">{o.customer_phone}</div></td>
                     <td className="nowrap">{formatDate(o.event_date)}<div className="cell-sub">{o.fulfillment_type === 'DELIVERY' ? 'Delivery' : 'Collection'}</div></td>
                     <td><StatusBadge status={o.status} /></td>
-                    <td><StatusBadge status={o.payment_status} />{o.amount_paid > 0 && o.payment_status !== 'PAID' && <div className="cell-sub">{formatLKR(o.amount_paid)} paid</div>}</td>
+                    <td>
+                      <StatusBadge status={o.payment_status} />
+                      <div className="cell-sub">{o.payment_option === 'ONLINE' ? (o.has_custom_cake ? 'Pre-order · online' : 'Online') : 'Cash on delivery'}</div>
+                      {o.amount_paid > 0 && !['PAID', 'REFUNDED'].includes(o.payment_status) && <div className="cell-sub">{formatLKR(o.amount_paid)} paid</div>}
+                    </td>
                     <td className="num">{o.status === 'PENDING' && o.has_custom_cake ? <span className="muted text-sm">Quote needed</span> : formatLKR(o.total_amount)}</td>
                   </tr>
                 ))}

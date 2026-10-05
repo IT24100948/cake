@@ -168,8 +168,11 @@ async function main() {
   if (seeded && !RESET) {
     // Older setups used drawn placeholder artwork for the demo products: switch them to real photos.
     const { applyProductPhotos } = require('../server/db/productPhotos');
+    const { migrate } = require('../server/db/migrate');
     await conn.query(`USE \`${db.database}\``);
     const run = async (sql, params) => (await conn.query(sql, params))[0];
+    const changes = await migrate(run);
+    if (changes.length) say(green(`  ✔ Database updated for online payments and refunds (${changes.join(', ')}).`));
     const updated = await applyProductPhotos(run);
     if (updated) say(green(`  ✔ ${updated} demo product${updated === 1 ? '' : 's'} now use real photos.`));
   }

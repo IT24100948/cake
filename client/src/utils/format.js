@@ -58,6 +58,9 @@ export const STATUS_META = {
   PARTIALLY_PAID: { label: 'Partially paid', tone: 'warning' },
   PAID: { label: 'Paid', tone: 'success' },
   REFUNDED: { label: 'Refunded', tone: 'neutral' },
+  // Payment option
+  ONLINE: { label: 'Pay online', tone: 'info' },
+  CASH_ON_DELIVERY: { label: 'Cash on delivery', tone: 'neutral' },
   // Delivery status
   SCHEDULED: { label: 'Scheduled', tone: 'info' },
   DELIVERED: { label: 'Delivered', tone: 'success' },
@@ -74,6 +77,20 @@ export const PAYMENT_METHODS = [
   { value: 'ONLINE_TRANSFER', label: 'Online transfer' },
 ];
 export const methodLabel = (m) => PAYMENT_METHODS.find((x) => x.value === m)?.label || m;
+
+/** Mirrors the API rules: custom cakes are pre-orders paid online; other orders may be cash on delivery. */
+export const CUSTOM_CAKE_LEAD_DAYS = 3;
+export const PAYMENT_OPTIONS = [
+  { value: 'ONLINE', label: 'Pay online by card' },
+  { value: 'CASH_ON_DELIVERY', label: 'Cash on delivery / collection' },
+];
+/** Methods staff may record by hand per payment option (online card payments come only from the gateway). */
+export const STAFF_PAYMENT_METHODS = {
+  ONLINE: ['BANK_TRANSFER', 'ONLINE_TRANSFER'],
+  CASH_ON_DELIVERY: ['CASH', 'CARD', 'BANK_TRANSFER', 'ONLINE_TRANSFER'],
+};
+/** "Visa •••• 4242" for gateway payments, otherwise the method name. */
+export const paymentLabel = (p) => (p.card_last4 ? `Online card · ${p.card_brand} •••• ${p.card_last4}` : methodLabel(p.method));
 
 export const ORDER_FLOW = {
   DELIVERY: ['PENDING', 'CONFIRMED', 'IN_PREPARATION', 'READY', 'OUT_FOR_DELIVERY', 'COMPLETED'],

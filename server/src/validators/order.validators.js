@@ -2,6 +2,7 @@ const { body } = require('express-validator');
 const ApiError = require('../utils/ApiError');
 const { toDateString } = require('../utils/helpers');
 const { phoneRule } = require('./common');
+const { PAYMENT_OPTIONS } = require('../config/constants');
 
 /** Multipart order submissions send the JSON order in a `payload` field alongside the image. */
 function parseMultipartPayload(req, res, next) {
@@ -58,6 +59,9 @@ const orderCreateRules = [
   body('cakeRequirement').optional({ values: 'null' }).isObject().withMessage('Invalid cake requirement'),
   ...cakeRules('cakeRequirement', { required: false }),
   body('fulfillmentType').isIn(['DELIVERY', 'COLLECTION']).withMessage('Choose delivery or collection'),
+  body('paymentOption').isIn(PAYMENT_OPTIONS).withMessage('Choose online payment or cash on delivery'),
+  // Card details for "pay online" are checked by the payment gateway itself (see order.service createOrder).
+  body('card').optional({ values: 'null' }).isObject().withMessage('Invalid card details'),
   futureDate('eventDate', 'Required date'),
   body('notes').optional({ values: 'falsy' }).trim().isLength({ max: 500 }).withMessage('Notes must be 500 characters or fewer'),
   body('delivery.recipientName').optional({ values: 'falsy' }).trim().isLength({ min: 2, max: 100 }).withMessage('Recipient name must be 2-100 characters'),
