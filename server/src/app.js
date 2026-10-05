@@ -27,7 +27,7 @@ app.use(helmet({
       'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       'connect-src': ["'self'"],
       'worker-src': ["'self'", 'blob:'],
-      // The Docker build is plain http://localhost; HTTPS hosts (Vercel) already redirect.
+      // Local runs are plain http://localhost; HTTPS hosts (Vercel) already redirect.
       'upgrade-insecure-requests': null,
     },
   },
@@ -57,7 +57,7 @@ staffApi.use(operationsRoutes);
 api.use(staffApi);
 app.use('/api', api);
 
-// Docker / single-server mode: serve the built React app and let the client router handle deep links.
+// Single-server mode: serve the built React app and let the client router handle deep links.
 if (serveClient) {
   const dist = path.join(__dirname, '..', '..', 'client', 'dist');
   app.use(express.static(dist, { index: false, maxAge: '1h' }));

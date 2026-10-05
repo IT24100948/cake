@@ -11,6 +11,9 @@
     "node": "22.x"
   },
   "scripts": {
+    "start": "node scripts/start.js",
+    "setup": "node scripts/setup.js",
+    "db:reset": "node scripts/setup.js --reset",
     "dev:api": "npm run dev -w server",
     "dev:web": "npm run dev -w client",
     "build": "npm run build -w client",

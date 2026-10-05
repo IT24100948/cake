@@ -10,7 +10,7 @@
     "db:reset": "node db/reset.js",
     "seed": "node db/seed.js",
     "setup": "node db/reset.js && node db/seed.js",
-    "test": "NODE_ENV=test jest --runInBand"
+    "test": "jest --runInBand"
   },
   "jest": {
     "testEnvironment": "node",

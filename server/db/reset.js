@@ -10,7 +10,7 @@ const path = require('path');
 const mysql = require('mysql2/promise');
 const { db, dbTimezone } = require('../src/config/env');
 
-const isLocalHost = (h) => ['127.0.0.1', 'localhost', '::1', 'mysql'].includes(h);
+const isLocalHost = (h) => ['127.0.0.1', 'localhost', '::1'].includes(h);
 
 async function resetDatabase({ silent = false } = {}) {
   if (!isLocalHost(db.host) && process.env.CONFIRM_DB_RESET !== 'yes') {
