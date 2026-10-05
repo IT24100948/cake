@@ -1,96 +1,178 @@
 # Devma Cake n' Party — Setup & Test Guide
 
-Run the complete system (shop, staff portal, API and MySQL database) on **any computer** with **one script**.
-Windows, macOS and Linux are all supported. The only thing you install is **Docker Desktop**. You don't need Node.js, MySQL or any configuration.
+Run the complete system (shop, staff portal, API and MySQL database) on your own computer
+with **one script**. No Docker. It uses the **MySQL server you already manage with MySQL Workbench**.
 
-After the script finishes, the database is created and filled with demo data, the logins below work, and your browser opens. All that's left is testing.
+You need two things installed:
+
+| What | Why | Get it |
+|---|---|---|
+| **Node.js 20 or newer** (22 LTS recommended) | Runs the website and the API | https://nodejs.org → *LTS* installer, keep the defaults |
+| **MySQL Server 8** (+ MySQL Workbench) | Stores the data | Usually already installed with Workbench. If not, see Step 1 below. |
+
+> **MySQL Workbench is only a viewer/editor.** It connects to a *MySQL Server*. If you can open your
+> *Local instance* in Workbench and run `SELECT 1;`, you already have a running MySQL Server and you're ready.
+
+After the script finishes, the database is created and filled with demo data, the logins below work, and your browser opens.
 
 ---
 
 ## Login details
 
-Every account uses the same password: **`Devma@2026`**
+On a fresh setup every demo account uses the same password: **`Devma@2026`**
+(the exact passwords are always saved in `server/.seed-credentials`).
 
 | Who | Email | What they can do | Where |
 |---|---|---|---|
-| **Admin** (business owner) | `admin@devma.lk` | Everything: dashboard, orders, products, inventory, staff accounts, roles, audit log | http://localhost:8080/staff/login |
-| **Shop Staff** | `staff@devma.lk` | Orders, customers, payments, delivery, view products | http://localhost:8080/staff/login |
-| **Technical Support** | `support@devma.lk` | Staff accounts, audit records | http://localhost:8080/staff/login |
-| **Customer** | `customer@devma.lk` | Shop, build a cake, checkout, track orders, notifications | http://localhost:8080/login |
+| **Admin** (business owner) | `admin@devma.lk` | Everything: dashboard, orders, products, inventory, staff accounts, roles, audit log | http://localhost:5173/staff/login |
+| **Shop Staff** | `staff@devma.lk` | Orders, customers, payments, delivery, view products | http://localhost:5173/staff/login |
+| **Technical Support** | `support@devma.lk` | Staff accounts, audit records | http://localhost:5173/staff/login |
+| **Customer** | `customer@devma.lk` | Shop, build a cake, checkout, track orders, notifications | http://localhost:5173/login |
 
-The database (optional, for tools like MySQL Workbench) is at host `localhost`, port `3307`, user `devma`, password `devma-db-2026`, database `devma_cake_party`.
+Every page (shop, customer account, staff and admin portal) is also linked from the **Quick links** buttons on the home page,
+and the **Staff / Admin** button in the top bar opens the staff portal.
 
 > These are demo credentials for local testing only.
 
 ---
 
-## Part A — Windows (starting from nothing)
+## Windows 11 — complete setup from a fresh PC (no Docker)
 
-### Step 1. Check your PC (1 minute)
-- Windows 10 (version 22H2 or newer) or Windows 11, 64-bit, with at least 8 GB RAM.
-- Virtualisation must be enabled. Open **Task Manager → Performance → CPU** and look for **Virtualization: Enabled**.
-  If it says *Disabled*, turn on *Intel VT-x* or *AMD-V / SVM* in your BIOS/UEFI settings, then come back.
+About 20 minutes, mostly downloads. You install three things once: **Node.js**, **MySQL Server** and (optionally) **MySQL Workbench**.
 
-### Step 2. Get the project
-Choose **one** of these:
-- **Download ZIP:** on the GitHub page click **Code → Download ZIP**, then right-click the file → **Extract All…** to a simple folder such as `C:\Devma`.
-- **Git:** run `git clone https://github.com/IT24100948/cake.git C:\Devma`
-- **USB / shared folder:** copy the whole project folder to `C:\Devma`.
+### W1. Install Node.js
+1. Go to https://nodejs.org and download the **LTS** *Windows Installer (.msi)*.
+2. Run it and keep every default. The *"Tools for native modules"* checkbox isn't needed.
+3. Open a **new** PowerShell window and check that `node -v` prints `v20` or newer.
 
-> Tip: avoid OneDrive-synced folders such as *Documents* or *Desktop* if OneDrive is on. A plain folder like `C:\Devma` is the most reliable.
+(Or in PowerShell: `winget install OpenJS.NodeJS.LTS`, then open a new window.)
 
-### Step 3. Double-click `start.bat`
-Open the project folder and double-click **`start.bat`**.
+### W2. Install MySQL Server and set it up correctly
+1. Go to https://dev.mysql.com/downloads/mysql/. Choose **MySQL Community Server 8.4 LTS**, *Microsoft Windows*, and download the **MSI Installer**.
+   You don't need an Oracle account: click *"No thanks, just start my download"*.
+2. Run the installer and choose **Typical**. At the end, leave **"Run MySQL Configurator"** ticked.
+3. In **MySQL Configurator**, use these settings:
 
-- If Windows shows *"Windows protected your PC"*, click **More info → Run anyway**. The script is plain text; you can open it in Notepad to check it.
-- **If Docker Desktop isn't installed,** the script offers to install it for you (via `winget`). Type **Y** and press Enter, then:
-  1. Restart Windows if it asks you to.
-  2. Open **Docker Desktop** from the Start menu, accept the terms, and skip sign-in. Wait until the bottom-left corner says **Engine running**.
-  3. If it mentions **WSL**, open *PowerShell as Administrator*, run `wsl --install` (or `wsl --update`), then restart.
-  4. Double-click **`start.bat`** again.
+   | Screen | Setting |
+   |---|---|
+   | Data Directory | keep the default |
+   | Type and Networking | *Development Computer*, **TCP/IP on port 3306**, *Open Windows Firewall port* can stay **unticked** (only this PC needs it) |
+   | Accounts and Roles | **set a root password and write it down**. You'll type it once into the setup script. You don't need to add other users. |
+   | Windows Service | **Configure MySQL Server as a Windows Service** ✔, **Start the MySQL Server at System Startup** ✔, *Standard System Account* |
+   | Server File Permissions | keep the default |
+   | Sample Databases | not needed |
 
-  (You can also install Docker Desktop yourself from https://www.docker.com/products/docker-desktop/ and keep the default *Use WSL 2* option.)
+   Click **Execute**, then **Finish**. MySQL now runs in the background and starts with Windows. The service is called **MySQL84**.
+4. Check it's running: press **Start**, type **Services**, find **MySQL84** and look for *Status: Running*.
 
-### Step 4. Wait for "READY"
-The **first** run downloads about 400 MB and builds the app, which takes **3–8 minutes**. Later starts take about 20 seconds.
-When you see this:
+> **MySQL 8.0 already installed** (from the old *MySQL Installer*)? That works too. Its service is **MySQL80**. Use the root password you set back then.
+> **Forgot the root password?** The easiest fix on a dev PC is to uninstall MySQL Server, delete `C:\ProgramData\MySQL`, and install again.
 
-```
-  ============================================================
-   READY:  http://localhost:8080
-  ============================================================
-```
+### W3. Install MySQL Workbench (optional, to look at the data)
+Download it from https://dev.mysql.com/downloads/workbench/ (MSI) and install it. If it asks for the *Visual C++ Redistributable*, install that from the link it shows.
+Open it and you'll see **Local instance MySQL84** (root@localhost:3306). Double-click it and enter your root password.
+You don't need to create a database or run any SQL. The app's setup script does that.
 
-your browser opens the shop automatically and the logins are printed in the window.
+### W4. Get the project
+Download the ZIP from GitHub (**Code → Download ZIP**) and extract it to a simple folder such as `C:\Devma`.
+Avoid OneDrive folders such as *Desktop* or *Documents*, and avoid very long paths.
 
-### Everyday use (Windows)
-| Double-click | What it does |
+### W5. Start it: double-click `start.bat`
+- If Windows shows *"Windows protected your PC"*: click **More info → Run anyway**. It's a plain script; you can read it in Notepad.
+- **First run:** it installs the packages (1–3 minutes), then asks for your MySQL login:
+
+  ```
+  MySQL host [127.0.0.1]:     ← press Enter
+  MySQL port [3306]:          ← press Enter
+  MySQL user [root]:          ← press Enter
+  MySQL password:             ← type the root password from W2 (nothing shows while typing), press Enter
+  ```
+
+  It saves the login in `server\.env`, creates the **`devma_cake_party`** database with all tables and the demo data, starts the API and the website, and opens http://localhost:5173.
+- If **Windows Defender Firewall** asks about *Node.js*, click **Cancel**, or allow *Private networks* only. The app runs on this PC, so nothing needs to come in from outside.
+- Keep the black window open while you use the app. **Ctrl+C** or closing the window stops it. Next time, just double-click `start.bat` again; it won't ask anything and your data is kept.
+- `reset.bat` wipes the database and reloads the demo data (all logins: `Devma@2026`). It asks you to type `yes` first.
+
+### W6. See the data
+In Workbench: open **Local instance MySQL84**, click the refresh icon in *Schemas*, then expand **devma_cake_party → Tables**. Right-click a table → **Select Rows**.
+
+### Windows problems
+| You see | Fix |
 |---|---|
-| `start.bat` | Start everything (your data from last time is kept) |
-| `stop.bat` | Stop everything (data is kept) |
-| `reset.bat` | Delete all data and start fresh with the original demo data |
+| `'node' is not recognized` | Node.js isn't installed, or the window was opened before installing it. Install (W1), then open a **new** window. |
+| *Cannot reach MySQL at 127.0.0.1:3306 (ECONNREFUSED)* | The MySQL service is stopped: **Services → MySQL84 → Start**. If you chose another port in W2, set `DB_PORT` in `server\.env`. |
+| *MySQL refused the login for "root"* | Wrong password. The script asks again. Or edit `DB_PASSWORD=` in `server\.env` (open it with Notepad). |
+| `npm warn EBADENGINE` during install | Harmless: the project is tested on Node 22, and newer LTS versions work. |
+| `npm install` fails with *EPERM* or a path error | Move the folder out of OneDrive to `C:\Devma`, delete the `node_modules` folder, run `start.bat` again. |
+| Port 5000 / 5173 in use | Nothing to do: the script picks the next free port and prints the address. |
+| The window flashes and closes | Open PowerShell in the folder (Shift+right-click → *Open in Terminal*) and run `.\start.bat` to read the message. |
 
 ---
 
-## Part B — macOS / Linux
+## macOS / Linux
 
-1. Install Docker:
-   - **macOS:** install [Docker Desktop](https://www.docker.com/products/docker-desktop/), open it once and wait for *Engine running*.
-   - **Linux:** install Docker Engine with the Compose plugin: `curl -fsSL https://get.docker.com | sh`
-2. Get the project (ZIP or `git clone`, as above).
-3. In a terminal, from the project folder, run:
+### Step 1 — Make sure MySQL Server is running
 
-```bash
-./start.sh
+Open **MySQL Workbench** and double-click your local connection (usually *Local instance MySQL80*, `root@localhost:3306`).
+
+- **It opens:** MySQL is running. Remember the **user** (usually `root`) and **password** you typed. Go to Step 2.
+- **"Can't connect to MySQL server on localhost:3306":** the server is installed but stopped. Start it:
+  - **Windows:** press Start, type **Services**, find **MySQL80** (or *MySQL*) → **Start**.
+    Or in Workbench: **Server → Startup/Shutdown → Start Server**.
+  - **macOS:** **System Settings → MySQL → Start MySQL Server** (Homebrew: `brew services start mysql`).
+- **No local connection / no server installed:** download **MySQL Community Server** from https://dev.mysql.com/downloads/
+  (on Windows use the **MySQL Installer** and pick *Server only* or *Developer Default*). Set a **root password** during
+  installation and write it down.
+
+You do **not** need to create a database or run any SQL yourself. The setup script creates the `devma_cake_party`
+database and all its tables.
+
+### Step 2 — Get the project
+
+- **Download ZIP:** on the GitHub page click **Code → Download ZIP**, then extract it to a simple folder such as `C:\Devma`.
+- **Git:** `git clone https://github.com/IT24100948/cake.git`
+
+> Tip (Windows): avoid OneDrive-synced folders such as *Documents* or *Desktop*. A plain folder like `C:\Devma` is the most reliable.
+
+### Step 3 — Start it
+
+| Windows | macOS / Linux |
+|---|---|
+| Double-click **`start.bat`** | In a terminal in the project folder: `./start.sh` |
+
+The **first** time, the script:
+1. installs the dependencies (`npm install`, 1–3 minutes);
+2. asks for your MySQL login. Type the **same host, port, user and password you use in MySQL Workbench**
+   (press Enter to accept `127.0.0.1`, `3306`, `root`). The password isn't shown while you type. It's saved in `server/.env`;
+3. creates the `devma_cake_party` database with all tables and the demo data.
+
+Then it starts the API and the website and opens your browser when you see:
+
+```
+  ============================================================
+   READY:  http://localhost:5173
+  ============================================================
 ```
 
-| Command | What it does |
-|---|---|
-| `./start.sh` | Start everything |
-| `./stop.sh` | Stop (data kept) |
-| `./reset.sh` | Delete all data and start fresh with demo data |
+Keep that window open while you use the app. **Press Ctrl+C** (or close the window) to stop.
+Later starts skip the questions and keep your data.
 
-If you get *"permission denied"*, run `chmod +x *.sh scripts/*.sh` once.
+### Everyday use
+| Windows | macOS / Linux | What it does |
+|---|---|---|
+| `start.bat` | `./start.sh` (or `npm start`) | Start everything (your data is kept) |
+| Ctrl+C in the window | Ctrl+C | Stop |
+| `reset.bat` | `./reset.sh` (or `npm run db:reset`) | Delete all data and load fresh demo data (asks you to type `yes`) |
+
+If macOS says *"permission denied"*, run `chmod +x start.sh reset.sh` once.
+
+### Step 4 — Look at the data in MySQL Workbench (optional)
+
+In Workbench, open your local connection and click the **refresh** icon in the *Schemas* panel. You'll see
+**`devma_cake_party`** with 16 tables (`staff`, `customers`, `products`, `orders`, `payments`, …).
+Right-click a table → **Select Rows** to see what the app saved, e.g. a new staff account or customer sign-up.
+
+> Don't run `server/db/schema.sql` by hand on a database with data: it drops and recreates every table.
 
 ---
 
@@ -98,16 +180,17 @@ If you get *"permission denied"*, run `chmod +x *.sh scripts/*.sh` once.
 
 The demo data already contains customers, products and orders in different stages (pending, confirmed, in preparation, ready for collection, completed and cancelled), so every screen has something in it.
 
-### 1. Customer journey — shop at http://localhost:8080
+### 1. Customer journey — shop at http://localhost:5173
 | # | Do this | You should see | Story |
 |---|---|---|---|
 | 1 | Open the home page, then drag the 3D cake | The cake turns and tilts | — |
+| 1b | Scroll to **Quick links** under the banner | Buttons for every shop, customer and staff/admin page | — |
 | 2 | **Cakes / Party Decorations**: search, filter and sort | Only available products are listed | US11 |
 | 3 | Click **Sign up** and create your own account | You're logged in straight away | US12 |
 | 4 | **Build Your Cake**: change cake, frosting, decoration and size, then click **See inside** | The 3D cake updates and the slice shows the layers; the price changes | US13 |
 | 5 | Click **Add to Order** | The cake thumbnail flies into the cart | US13 |
 | 6 | Add some balloons or candles from **Party Decorations** | The cart count goes up | US14 |
-| 7 | Open the cart → **Continue to checkout** → choose delivery → **Place order** | An order number like `DCP-2026…` appears | US15 |
+| 7 | Open the cart → **Continue to checkout** → choose delivery → pay online → enter test card `4242 4242 4242 4242` (or pick it under *Test cards*) → **Verify card & place order** | Without card details the order can't be placed, and `4000 0000 0000 0002` is declined. With a custom cake, *Cash on delivery* is disabled (pre-order, pay online) and the date must be 3+ days ahead. Decoration-only orders can choose either. An order number like `DCP-2026…` appears | US15 |
 | 8 | **My Orders** → open the order | Status *Pending* and a timeline | US18 |
 
 ### 2. Staff journey — log in as `staff@devma.lk` at /staff/login
@@ -115,10 +198,13 @@ The demo data already contains customers, products and orders in different stage
 |---|---|---|---|
 | 1 | **Orders → Pending** → open the order you just placed | Customer, items, cake details and the reference image | US16 |
 | 2 | Click **Confirm order** and enter a cake price and delivery fee | Status *Confirmed*; stock is reserved | US19 |
-| 3 | **Record payment**: part of the amount by *Bank transfer* (needs a reference) | Payment status *Partially paid* | US20, US21 |
+| 3 | Look at the order's **Payments** section | The card from checkout was charged automatically on confirmation, and the order is *Paid* | US20, US21 |
+| 3b | Place another custom-cake order using card `4000 0000 0000 9995`, then confirm it as staff | Checkout accepts the card, but the charge on confirmation is declined. **Start preparation** and cash payments are blocked | US20, US23 |
+| 3c | As the customer → **My Orders** → that order → **Pay now** → `4242 4242 4242 4242` | A receipt appears and the order becomes *Paid*. Staff can now **Start preparation** | US20, US21, US23 |
 | 4 | **Edit / schedule** the delivery: set a date, time slot and assigned staff | Delivery status *Scheduled* | US22 |
 | 5 | Move the status: **Start preparation → Mark as ready → Send out for delivery** | Progress bar advances; *Complete* stays disabled until fully paid | US17, US23 |
-| 6 | Record the remaining payment, then **Complete order** | Status *Completed* | US23 |
+| 6 | **Complete order** (it was paid online in full) | Status *Completed* | US23 |
+| 6b | For a *cash on delivery* order, try **Complete** before recording the cash | Blocked until the cash is recorded | US20, US23 |
 | 7 | Log in as the customer again → bell icon / **Notifications** | A notification for every step | US24 |
 
 ### 3. Admin journey — log in as `admin@devma.lk`
@@ -131,7 +217,8 @@ The demo data already contains customers, products and orders in different stage
 | 5 | Log in as that new account in a private window | You're forced to change the password first | US03, US04 |
 | 6 | **Roles & Permissions**: create a role with only *Manage deliveries*, then assign it to that staff member | Their sidebar shrinks to Delivery only | US02 |
 | 7 | **Deactivate** that account | They're logged out on their next click | US05 |
-| 8 | **Audit Records** | Every login, change and order action is listed, with filters | US06 |
+| 8 | **Audit Records** | Every login, change and order action is listed, with filters, including online payments (succeeded and failed) and refunds | US06 |
+| 8b | Cancel a paid order, then open **Payments** | A *Refund* row appears (card refunds go back to the card) and the order shows *Refunded* | US21 |
 | 9 | Try a wrong password 5 times for any staff account | The account locks for 15 minutes | US03 |
 
 > To repeat the tests from a clean state, run `reset.bat` (Windows) or `./reset.sh` (macOS/Linux).
@@ -142,25 +229,25 @@ The demo data already contains customers, products and orders in different stage
 
 | Problem | Fix |
 |---|---|
-| *"Docker Desktop did not start"* | Open Docker Desktop manually and wait for **Engine running**, then run the start script again. |
-| Docker says **WSL** needs updating | PowerShell as Administrator: `wsl --update`, then restart Windows. |
-| *"Virtualization support not detected"* | Enable VT-x / AMD-V (SVM) in BIOS/UEFI (see Step 1). |
-| Port 8080 is already used | Nothing to do: the script picks the next free port (8081, 8082…) and prints it. |
-| The page doesn't load right after *READY* | Wait 10 seconds and refresh. On very slow PCs the first start can take longer. |
-| You want to see what's happening | Run `docker compose logs -f app` in the project folder. |
-| Logins don't work after changing things | Run `reset.bat` / `./reset.sh` to restore the demo data. |
-| The script is blocked by antivirus | Allow it, or run the steps by hand: `docker compose up -d --build`, then open http://localhost:8080 |
-| You want to remove everything | Run `docker compose down -v --rmi local` in the project folder. |
+| *"Cannot reach MySQL at 127.0.0.1:3306 (ECONNREFUSED)"* | MySQL Server isn't running. Start it (Step 1), then run the start script again. If your server uses another port, change `DB_PORT` in `server/.env`. |
+| *"MySQL refused the login for root"* | The password is wrong. The script asks again; or edit `DB_USER` / `DB_PASSWORD` in `server/.env` to match what works in Workbench. |
+| *"Node.js is not installed"* / `node` not recognised | Install Node.js LTS from https://nodejs.org, then **open a new** terminal/window and try again. |
+| Port 5000 or 5173 already used (e.g. macOS AirPlay uses 5000) | Nothing to do: the script picks the next free ports and prints the address to open. |
+| Logins don't work | Check `server/.seed-credentials`, or run `reset.bat` / `./reset.sh` to restore the demo data with the password `Devma@2026`. |
+| A phone number is rejected | Use a Sri Lankan number, e.g. `0771234567`, `077 123 4567` or `+94 77 123 4567`. |
+| The page shows *"Cannot reach the server"* | The window running the script was closed. Run the start script again. |
+| `npm install` fails on Windows | Make sure the folder path has no special characters and isn't inside OneDrive, then delete `node_modules` and try again. |
 
 ---
 
-## What the script actually does
-1. Checks that Docker is installed (on Windows it offers to install it) and starts the Docker engine if needed.
-2. Picks free ports (8080 for the app, 3307 for MySQL, or the next free ones).
-3. Runs `docker compose up -d --build`, which starts two containers:
-   - **mysql**: MySQL 8.4 with its data stored in a Docker volume, so it survives restarts.
-   - **app**: Node 22 running the Express API, which also serves the built React shop and staff portal.
-4. On the **first** start only, the app creates all tables (`server/db/schema.sql`) and loads the demo data with the password `Devma@2026`. Later starts keep your data.
-5. Waits until http://localhost:8080/api/health answers, then prints the logins and opens your browser.
+## What the scripts actually do
+- **`start.bat` / `start.sh`** → runs `npm install` the first time, then `node scripts/start.js`.
+- **`scripts/setup.js`** (run by start):
+  1. creates `server/.env` from `server/.env.example` with a random `JWT_SECRET` and the MySQL login you type;
+  2. connects to your MySQL server and explains what to do if it can't;
+  3. on the **first** run only, creates the `devma_cake_party` database from `server/db/schema.sql` and loads the demo data
+     (`server/db/seed.js`, password `Devma@2026`). Later runs keep your data. `--reset` (used by `reset.*`) recreates it.
+- **`scripts/start.js`** starts the API (`server/`, Express on port 5000) and the website (`client/`, Vite on port 5173,
+  which forwards `/api` to the API), picks other ports if those are busy, and opens the browser.
 
-Developers who want to run without Docker (Node + local MySQL, hot reload, the Jest test suite) should see the main [README](../README.md).
+Developer details (tests, Vercel deployment) are in the main [README](../README.md).

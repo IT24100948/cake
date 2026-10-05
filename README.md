@@ -9,83 +9,69 @@ Web-based Cake and Party Decoration Management System for **Devma Cake n' Party*
 | Backend | Node.js + Express (REST API) |
 | Database | MySQL 8 |
 | Testing | Jest + Supertest (API), Postman collection |
-| Hosting | Docker (any machine) · Vercel (static + serverless API) with managed MySQL and Vercel Blob |
+| Hosting | Local (Node + your own MySQL server) · Vercel (static + serverless API) with managed MySQL and Vercel Blob |
 
-## Quick start (any computer, one script)
+## Quick start (one script, your own MySQL)
 
-You only need **[Docker Desktop](https://www.docker.com/products/docker-desktop/)**. You don't need Node.js or MySQL.
+You need **[Node.js 20+](https://nodejs.org)** and a running **MySQL 8 server** (the one you open in MySQL Workbench). No Docker.
 
 | Windows | macOS / Linux |
 |---|---|
-| Double-click **`start.bat`** | Run **`./start.sh`** |
+| Double-click **`start.bat`** | Run **`./start.sh`** (or `npm install && npm start`) |
 
-The script builds everything, creates and seeds the database, and opens http://localhost:8080.
-Every demo login uses the password **`Devma@2026`**: `admin@devma.lk`, `staff@devma.lk`, `support@devma.lk`, `customer@devma.lk`.
+The first run installs the dependencies, asks for the MySQL login you use in Workbench (saved to `server/.env`), creates the
+`devma_cake_party` database with demo data, then starts the API and the website and opens http://localhost:5173.
+Every demo login on a fresh setup uses the password **`Devma@2026`** (`admin@devma.lk`, `staff@devma.lk`, `support@devma.lk`,
+`customer@devma.lk`); the exact passwords are in `server/.seed-credentials`.
 
-The step-by-step guide for a fresh Windows PC, with a story-by-story test checklist and troubleshooting, is in **[docs/SETUP-GUIDE.md](docs/SETUP-GUIDE.md)**.
+The home page has **Quick links** buttons for every shop, customer and staff/admin page, and a **Staff / Admin** button in the top bar.
 
-The sections below are for **developers** running without Docker.
+The step-by-step guide (starting MySQL, Workbench, a story-by-story test checklist and troubleshooting) is in **[docs/SETUP-GUIDE.md](docs/SETUP-GUIDE.md)**.
 
 ---
 
 ## 1. Prerequisites
 
-- Node.js 22 (20+ works)
-- MySQL 8. On macOS:
-
-  ```bash
-  brew install mysql
-  ```
-
-  ```bash
-  brew services start mysql
-  ```
+- Node.js 22 LTS (20+ works)
+- MySQL Server 8, running locally. MySQL Workbench is optional and only used to look at the data.
 
 ## 2. Setup
 
-The repo is an npm workspace (`server/` and `client/`). Install everything once, from the repo root:
+From the repo root (an npm workspace with `server/` and `client/`):
 
 ```bash
-npm install && cp server/.env.example server/.env
+npm install
 ```
-
-Edit `server/.env`:
-
-- Set `DB_USER` and `DB_PASSWORD` for your MySQL.
-- Set `JWT_SECRET` to a long random string.
-
-Then create the database and load the demo data:
 
 ```bash
-npm run db:setup
+npm run setup
 ```
 
-`npm run db:setup` does two things:
+`npm run setup` (`scripts/setup.js`):
 
-- creates the `devma_cake_party` database and all tables from `server/db/schema.sql`;
-- seeds roles, permissions, demo accounts, products and sample orders.
+- creates `server/.env` from `server/.env.example` (random `JWT_SECRET`, and the MySQL host/port/user/password you type);
+- checks the MySQL connection and explains what to fix if it fails;
+- on the first run, creates the `devma_cake_party` database and all tables from `server/db/schema.sql`, and seeds roles,
+  permissions, demo accounts, products and sample orders. Later runs keep your data.
 
-The demo passwords are random. They're printed once and saved to `server/.seed-credentials`. To choose your own demo password instead, run:
+To wipe everything and reload the demo data (asks you to type `yes`):
 
 ```bash
-SEED_PASSWORD='YourPass123' npm run db:setup
+npm run db:reset
 ```
+
+To choose your own demo password, set `SEED_PASSWORD` when resetting, e.g. `SEED_PASSWORD='YourPass123' npm run db:reset`.
 
 ## 3. Run
 
-Open two terminals, both at the repo root.
-
-API on http://localhost:5000:
+API and website together, with auto-reload (Ctrl+C stops both):
 
 ```bash
-npm run dev:api
+npm start
 ```
 
-Web app on http://localhost:5173 (Vite proxies `/api` and `/uploads` to the API):
-
-```bash
-npm run dev:web
-```
+Or in two terminals: `npm run dev:api` (http://localhost:5000) and `npm run dev:web` (http://localhost:5173; Vite proxies `/api`
+and `/uploads` to the API). `npm start` picks other ports automatically if 5000 or 5173 are taken (macOS AirPlay uses 5000).
 
 | Area | URL | Demo account |
 |---|---|---|
@@ -167,7 +153,7 @@ DATABASE_URL='mysql://USER:PASSWORD@HOST:PORT/devma_cake_party' DB_SSL=true CONF
 
 - **Time zone:** the API pins the app clock and the MySQL session to Sri Lanka time (`APP_TIMEZONE` / `DB_TIMEZONE`), even though Vercel and managed databases run in UTC.
 - **Connection pool:** each serverless instance keeps a small pool (`DB_POOL_SIZE`, default 3 on Vercel), which suits free database plans.
-- **Seed images:** the demo product artwork is in `client/public/seed-images/` and is served by the CDN. Staff uploads go to Vercel Blob.
+- **Product photos:** the demo products use free-licence Unsplash photos (listed by SKU in `server/db/productPhotos.js`), loaded from Unsplash's CDN. Staff uploads go to Vercel Blob.
 - **Changing the schema later:** `db/schema.sql` recreates all tables, so it's for first-time setup only. For a live database, apply `ALTER TABLE …` changes by hand (or add a migration tool) instead of re-running setup.
 
 ---
@@ -199,7 +185,7 @@ DATABASE_URL='mysql://USER:PASSWORD@HOST:PORT/devma_cake_party' DB_SSL=true CONF
 | US12 Customer account | **Sign up** / **Log in** / **Profile** (details and password) |
 | US13 Cake requirements | **Custom Cake** form: occasion, flavour, weight, shape, tiers, icing, colours, theme, message, dietary notes, reference image |
 | US14 Select decorations | Add decorations from the Shop to the **Cart**, with a quantity and an optional note (e.g. a balloon number) |
-| US15 Submit order | **Checkout**: required date, delivery or collection, address, time slot and notes. The order gets a number like `DCP-YYYYMMDD-NNNN`. |
+| US15 Submit order | **Checkout**: required date, delivery or collection, address, time slot, notes and **payment option**. Custom cakes are pre-orders: at least 3 days' notice and online payment only. Orders without a custom cake can be *pay online* or *cash on delivery/collection*. The order gets a number like `DCP-YYYYMMDD-NNNN`. |
 | US16 View customer & order details | Staff **Orders** (status tabs, search, filters), **Order detail**, **Customers** list and customer detail |
 | US17 Update order details & status | Order detail → **Edit details**. Items can be changed while the order is pending; after confirmation you can change the cake requirements, quote, delivery fee, date and notes. Status changes follow the allowed flow. |
 | US18 Order status & history | Customer **My Orders** (current and history tabs) and order page with a progress stepper and timeline. Customers can cancel while the order is pending. |
@@ -208,11 +194,36 @@ DATABASE_URL='mysql://USER:PASSWORD@HOST:PORT/devma_cake_party' DB_SSL=true CONF
 | Story | Where |
 |---|---|
 | US19 Confirm orders | Order detail → **Confirm order**. You set the custom cake price and delivery fee, and the total is recalculated. Stock is reserved at this point, in one transaction; if stock is short, confirmation is refused. |
-| US20 Record payment | Order detail → **Record payment** (amount ≤ balance, method, reference for non-cash) and the **Payments** list |
-| US21 Update payment status | Updates automatically: Unpaid → Partially paid → Paid. **Change status** is available for corrections and refunds, validated against the recorded payments. |
+| US20 Record payment | **Online:** the customer must enter a card at checkout. The gateway verifies it (no money taken) and the order keeps only a token. When staff confirm the final total, the card is **charged automatically**. If that charge is declined, the customer pays from their order page with another card (see *Payments* below). **Cash on delivery:** staff use Order detail → **Record payment** when the cash is received. Online orders accept only bank/online transfers from staff, never cash. All of these appear in the **Payments** list. |
+| US21 Update payment status | Updates automatically: Unpaid → Partially paid → Paid → Refunded, from the payments and refunds recorded. Cancelling or rejecting a paid order **refunds it automatically**: card payments go back to the card and cash/transfers are recorded as returned. |
 | US22 Delivery / collection | Order detail → **Edit / schedule**: method, recipient, address, date, time slot and assigned staff. The **Delivery & Collection** board shows the day's work. |
-| US23 Status until completion | Pending → Confirmed → In preparation → Ready → Out for delivery / Ready for collection → Completed. Completion requires full payment. A failed delivery returns the order to Ready. Cancelling a confirmed order returns its stock. |
+| US23 Status until completion | Pending → Confirmed → In preparation → Ready → Out for delivery / Ready for collection → Completed. Online (pre-paid) orders can't start preparation until they're paid. Completion requires full payment. A failed delivery returns the order to Ready. Cancelling a confirmed order returns its stock. |
 | US24 Receive status information | In-app notifications (bell with unread count, Notifications page) for every status, payment and delivery change, plus the order timeline |
+
+### Payments (prototype, no third party)
+Online payments go through **DevmaPay sandbox** (`server/src/services/paymentGateway.js`), a gateway built into the API that behaves like a real card processor but moves no money:
+
+- **Card at checkout:** choosing *Pay online* requires card details before the order can be placed. The gateway verifies the card, without taking money, and returns a token. That token is saved in `payment_methods` with only the brand, last 4 digits and expiry. A declined card means the order is **not** placed.
+- **Charge on confirmation:** confirming the order charges the saved card for the final total, including the custom cake price and delivery fee set by staff. If it's declined, the order waits for payment and the customer is told to pay from the order page.
+- **Card checks:** card number (Luhn check and brand), expiry and CVC are validated on both the client and the server.
+- **Test cards only:** the result depends on which test card is used. Any other card number, including a real one, is declined.
+
+  | Card | Result |
+  |---|---|
+  | `4242 4242 4242 4242` (Visa), `5555 5555 5555 4444` (Mastercard) | Payment succeeds |
+  | `4000 0000 0000 0002` | Declined by the bank |
+  | `4000 0000 0000 9995` | Accepted at checkout, then declined when charged (insufficient funds), so it shows the "pay with another card" path |
+  | `4000 0000 0000 0069` | Card expired |
+  | `4000 0000 0000 0127` | Incorrect CVC |
+
+  Any future expiry date and any 3-digit CVC work.
+- **Gateway log:** every charge, decline and refund is stored in `payment_transactions` with a gateway reference. Only the card brand and last 4 digits are kept, never the full number or the CVC.
+- **No double charges:**
+  - each payment attempt carries an idempotency key, so a double-click or a network retry can't charge twice;
+  - the order row is locked while paying, so two simultaneous payments can't both succeed;
+  - the amount must match the balance due, so a total changed by staff in the meantime is caught.
+- **Refunds:** refunds are stored as `payments` rows of kind `REFUND`. Net paid, revenue and the Payments list all subtract them.
+- **Older databases:** `server/db/migrate.js` adds these tables and columns automatically on start.
 
 ### Management & Reporting (Solution Outline, Key Benefit 7)
 The staff **Dashboard** shows:
@@ -257,7 +268,7 @@ The customer home page (`client/src/landing/`) is a premium, hands-on storefront
 
 The builder keeps the parametric cake, because it has to recolour and slice.
 
-**Photography:** free-licence Unsplash images served from their CDN (IDs in `landing/data.js`). Replace them with Devma's own photos when available. The testimonials in the Moments section are placeholders and must be replaced with real customer reviews before launch.
+**Photography:** free-licence Unsplash images served from their CDN (landing photos in `landing/data.js`, product photos in `server/db/productPhotos.js`). Replace them with Devma's own photos when available. The testimonials in the Moments section are placeholders and must be replaced with real customer reviews before launch.
 
 ## 8. Roles (seeded)
 | Role | Permissions |
@@ -270,8 +281,9 @@ Admins can create more roles, such as a delivery-only driver role, on the **Role
 
 ## 9. Project structure
 ```
-start.bat / start.sh    one-click Docker setup (also stop.*, reset.*; logic in scripts/)
-Dockerfile, docker-compose.yml  app image (API + built storefront) and MySQL
+start.bat / start.sh    one-click local start (reset.* wipes and re-seeds the database)
+scripts/setup.js        creates server/.env, checks MySQL, creates + seeds the database
+scripts/start.js        runs setup, then the API and the website together
 api/index.js            Vercel serverless entry (wraps the Express app)
 vercel.json             build, routing and cache rules for Vercel
 server/
